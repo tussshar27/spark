@@ -1,1 +1,6 @@
+To process 25GB of data in spark:
+a. How many CPU cores are required to process 25GB of data?
+By default, spark creates one partition for each block of file (block is of 128mb in HDFS).
+Converting value in GB to MB:
+25GB = 25 * 1024 MB = 25600 MB.
 
