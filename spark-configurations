@@ -18,4 +18,8 @@ Total number of executors = total CPU cores/ Avg CPU cores per executor = 200/4 
 
 c. How much each executor memory is required to process 25 GB of data?
 Expected memory for each core = minimum 4 times of * (default partition size) = 4*128 MB = 512 MB.
+Executor memory should not be less than 1.5 * of spark reserved memory.(single core executor memory should not be les than 450 MB)
+Memory for each executor = 4 * 512 MB = 2 GB
+
+
 
