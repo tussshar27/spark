@@ -28,6 +28,10 @@ Total number of executor = 50
 Memeory for each executor = 2 GB
 Total memory for all executor = 50*2 GB = 100 GB.
 
+Thumb rule:
+Data = 25 GB
+No. of CPU cores = 4 * data = 4 * 25 = 200 cores.
+
 
 
 
