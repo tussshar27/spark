@@ -10,5 +10,7 @@ Therefore, 200 CPU cores are required to process 25 GB data in PARALLEL.
 
 b. How many executors are required to process 25 GB?
 As per the researchers, 2 to 5 is the range of cores for each executor.
+We have to do R&D like how is the job behaving, to find the suitable CPU cores for our executor by performing using 2 cores, 3 cores, etc.
 Average CPU cores per executor: 4
+
 
