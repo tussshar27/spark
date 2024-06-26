@@ -35,7 +35,9 @@ Total No. of executors = 2 times of Data = 2 * 25 GB = 50 GB.
 Memory for each executor = 4 * 512 MB = 2 GB.
 
 Scenario Questions:
-1. 
+1. Suppose we have data of 25 GB to process. If one task is taking 5mins to complete then how much time will it take to complete all tasks?
+For 25 GB of data, we have 200 cores and partitions which perform in parallel. so it will take 5mins only.
+
 
 
 
