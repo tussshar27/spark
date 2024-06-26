@@ -1,6 +1,14 @@
 To process 25GB of data in spark:
 a. How many CPU cores are required to process 25GB of data?
-By default, spark creates one partition for each block of file (block is of 128mb in HDFS).
+By default, spark creates one partition for each block of the file (block is of 128mb in HDFS).
 Converting value in GB to MB:
 25GB = 25 * 1024 MB = 25600 MB.
+
+Total number of partitions = total size of data/ size of each partition = 25600/128 = 200
+Number of cores = Number of Partitions.
+Therefore, 200 CPU cores are required to process 25 GB data in PARALLEL.
+
+b. How many executors are required to process 25 GB?
+As per the researchers, 2 to 5 is the range of cores for each executor.
+Average CPU cores per executor: 4
 
