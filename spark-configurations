@@ -23,6 +23,10 @@ Memory for each executor = CPU cores for each executor * memory for each core = 
 That means if we give 2 GB memory then only it will process 4 task in parallel.
 Suppose, if we give 1 GB instead of 2 GB then we have to reduce the number of cores or the job wil get failed.
 
+d. What is total memory required to process 25 GB data?
+Total number of executor = 50
+Memeory for each executor = 2 GB
+Total memory for all executor = 50*2 GB = 100 GB.
 
 
 
