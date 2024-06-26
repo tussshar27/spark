@@ -5,6 +5,7 @@ Converting value in GB to MB:
 25GB = 25 * 1024 MB = 25600 MB.
 
 Total number of partitions = total size of data/ size of each partition = 25600/128 = 200
+
 Number of cores = Number of Partitions.
 Therefore, 200 CPU cores are required to process 25 GB data in PARALLEL.
 
@@ -13,4 +14,8 @@ As per the researchers, 2 to 5 is the range of cores for each executor.
 We have to do R&D like how is the job behaving, to find the suitable CPU cores for our executor by performing using 2 cores, 3 cores, etc.
 Average CPU cores per executor: 4
 
+Total number of executors = total CPU cores/ Avg CPU cores per executor = 200/4 = 50
+
+c. How much each executor memory is required to process 25 GB of data?
+Expected memory for each core = minimum 4 times of * (default partition size) = 4*128 MB = 512 MB.
 
