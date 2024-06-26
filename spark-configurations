@@ -41,8 +41,9 @@ For 25 GB of data, we have 200 cores which perform in parallel. so it will take 
 2. Suppose client is assigning only 25 executors instead of 50 executors then how much time will it take?
 Since it is taking 5 mins for 50 executors, it would take 10 mins for 25 executors.
 and the total memory will required: 50 GB. Since for 50 executors, 100 GB of memory was required.
-So, out of 200 only 100 tasks/cores will perform at a time in parallel and the next 100 tasks/cores will wait in a queue for 5 mins to complete it.
+So, out of 200 only 100 tasks/cores will perform at a time in parallel and the next 100 tasks/cores will wait in a queue for 5 mins to complete it. So total it will take 10 mins to perform all the tasks.
 
+NOTE: Suppose there is no performance issue for client that means the client is fine if the job takes 10 mins to complete instead of 5 mins then use 25 executors instead of 50 executors.
 
 
 
