@@ -31,7 +31,11 @@ Total memory for all executor = 50*2 GB = 100 GB.
 Thumb rule:
 Data = 25 GB
 No. of CPU cores = 4 * data in GB = 4 * 25 = 200 cores.
+Total No. of executors = 2 times of Data = 2 * 25 GB = 50 GB.
+Memory for each executor = 4 * 512 MB = 2 GB.
 
+Scenario Questions:
+1. 
 
 
 
