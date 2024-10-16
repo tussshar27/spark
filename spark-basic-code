@@ -1,4 +1,5 @@
 --SQL CODE
+1.
 select product_id
 from products
 where low_fats = 'Y' and recyclable = 'Y';
@@ -20,3 +21,28 @@ result_df = filtered_df.select("product_id")
 
 # Show the result
 result_df.show()
+
+2.
+--SQL CODE
+select name
+from customer
+where referee_id is null or referee_id <> 2;
+
+--PYSPARK CODE
+from pyspark.sql import SparkSession
+
+# Initialize Spark session
+spark = SparkSession.builder.appName("CustomerFilter").getOrCreate()
+
+# Load the data into a DataFrame
+customer_df = spark.read.csv("path_to_customer.csv", header=True, inferSchema=True)
+
+# Filter the DataFrame
+filtered_df = customer_df.filter((customer_df.referee_id.isNull()) | (customer_df.referee_id != 2))
+
+# Select the name column
+result_df = filtered_df.select("name")
+
+# Show the result
+result_df.show()
+
