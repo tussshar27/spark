@@ -72,3 +72,34 @@ result_df.show()
 
 4.
 --SQL CODE
+select * from (
+select distinct author_id as id
+from views
+where author_id = viewer_id
+)
+order by id;
+
+--PYSPARK CODE
+from pyspark.sql import SparkSession
+
+# Initialize Spark session
+spark = SparkSession.builder.appName("AuthorFilter").getOrCreate()
+
+# Load the data into a DataFrame
+views_df = spark.read.csv("path_to_views.csv", header=True, inferSchema=True)
+
+# Filter and select distinct author_id where author_id equals viewer_id
+distinct_df = views_df.filter(views_df.author_id == views_df.viewer_id).select("author_id").distinct()
+
+# Rename the column to id
+distinct_df = distinct_df.withColumnRenamed("author_id", "id")
+
+# Order by id
+result_df = distinct_df.orderBy("id")
+
+# Show the result
+result_df.show()
+
+5.
+--SQL CODE
+
