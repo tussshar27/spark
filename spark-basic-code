@@ -1,0 +1,22 @@
+--SQL CODE
+select product_id
+from products
+where low_fats = 'Y' and recyclable = 'Y';
+
+from pyspark.sql import SparkSession
+
+--PYSPARK CODE
+# Initialize Spark session
+spark = SparkSession.builder.appName("ProductFilter").getOrCreate()
+
+# Load the data into a DataFrame
+products_df = spark.read.csv("path_to_products.csv", header=True, inferSchema=True)
+
+# Filter the DataFrame
+filtered_df = products_df.filter((products_df.low_fats == 'Y') & (products_df.recyclable == 'Y'))
+
+# Select the product_id column
+result_df = filtered_df.select("product_id")
+
+# Show the result
+result_df.show()
