@@ -46,3 +46,29 @@ result_df = filtered_df.select("name")
 # Show the result
 result_df.show()
 
+3.
+--SQL CODE
+select name, population, area
+from world
+where area >= 3000000 or population >= 25000000;
+
+--PYSPARK CODE
+from pyspark.sql import SparkSession
+
+# Initialize Spark session
+spark = SparkSession.builder.appName("WorldFilter").getOrCreate()
+
+# Load the data into a DataFrame
+world_df = spark.read.csv("path_to_world.csv", header=True, inferSchema=True)
+
+# Filter the DataFrame
+filtered_df = world_df.filter((world_df.area >= 3000000) | (world_df.population >= 25000000))
+
+# Select the name, population, and area columns
+result_df = filtered_df.select("name", "population", "area")
+
+# Show the result
+result_df.show()
+
+4.
+--SQL CODE
