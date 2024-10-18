@@ -72,11 +72,9 @@ result_df.show()
 
 4.
 --SQL CODE
-select * from (
 select distinct author_id as id
 from views
 where author_id = viewer_id
-)
 order by id;
 
 --PYSPARK CODE
@@ -101,5 +99,27 @@ result_df = distinct_df.orderBy("id")
 result_df.show()
 
 5.
+--SQL CODE
+select tweet_id
+from tweets
+where length(content)> 15;
+
+--PYSPARK CODE
+from pyspark.sql import SparkSession
+from pyspark.sql.functions import length
+
+# Initialize Spark session
+spark = SparkSession.builder.appName("TweetsAnalysis").getOrCreate()
+
+# Load your DataFrame (assuming it's already loaded as 'tweets_df')
+# tweets_df = spark.read.csv("path_to_your_csv_file", header=True, inferSchema=True)
+
+# Select tweet_id where length of content is greater than 15 using filter()
+result_df = tweets_df.select("tweet_id").filter(length("content") > 15)
+
+# Show the result
+result_df.show()
+
+6.
 --SQL CODE
 
