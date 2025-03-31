@@ -1,4 +1,4 @@
-To extract error lines with timestamps from a log file in PySpark, you can follow these steps:
+To extract error lines with timestamps from a log file in PySpark, you can follow these steps:.
 
 Load the log file into a DataFrame or RDD.
 Use a regular expression to identify lines with error messages and extract the timestamps.
