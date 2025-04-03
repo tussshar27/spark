@@ -23,10 +23,10 @@ RAM Memory for each executor = CPU cores for each executor * RAM memory for each
 That means if we give 2 GB memory then only it will process 4 task in parallel.
 Suppose, if we give 1 GB instead of 2 GB then we have to reduce the number of cores or the job wil get failed.
 
-d. What is total memory required to process 25 GB data?
+d. What is total RAM memory required to process 25 GB data?
 Total number of executor = 50
-Memeory for each executor = 2 GB
-Total memory for all executor = 50*2 GB = 100 GB.
+RAM Memeory for each executor = 2 GB
+Total RAM memory for all executor = 50*2 GB = 100 GB.
 
 Thumb rule:
 Data = 25 GB
@@ -78,6 +78,27 @@ Team3 = app1, app2
 Team4 = app1
 Team5 = app1, app2, app3, app4, app5
 Total = 18 spark applications
+
+Calculation:
+1 CPU core and 1GB RAM is reserved for the worker node to send a heartbeat.
+So,
+Total RAM: (128GB-1GB) * 14 workers = 1778GB ~= 1.8TB
+Total CORES: (48-1) * 14 ~= 650 CPU CORES
+
+Assume,
+5 cores per executor  = 650/5 = 130 executors.
+Average RAM memory per executor = Total RAM/Total Executors = 1.8TB/130 = 14GB
+2nd eg for better understanding above calculation, 100GB TOTAL RAM/2 executors = 50GB per executor.
+
+overhead memory exclusion: 10% of total memory or 384MB which ever is lower.
+=14GB - 14GB*10% = 14GB - 1.4GB  = 12.5GB per executor for 5 core per executor.
+Now, this solution is good for ideal scenario as shown below
+Team1 = app1, app2, app3
+Team2 = app1, app2, app3 
+Team3 = app1, app2, app3
+Team4 = app1, app2, app3
+Team5 = app1, app2, app3
+but for real world scenario it won't work since each team is working on different spark application with different configuration size.
 
 
 
