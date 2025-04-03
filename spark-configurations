@@ -17,9 +17,9 @@ Average CPU cores per executor: 4
 Total number of executors = total CPU cores/ Avg CPU cores per executor = 200/4 = 50
 
 c. How much each executor memory is required to process 25 GB of data?
-Expected memory for each core = minimum 4 times of * (default partition size) = 4*128 MB = 512 MB.
-Executor memory should not be less than 1.5 * of spark reserved memory.(single core executor memory should not be les than 450 MB)
-Memory for each executor = CPU cores for each executor * memory for each core = 4 * 512 MB = 2 GB
+Expected RAM memory for each core = minimum 4 times of * (default partition size) = 4*128 MB = 512 MB RAM per core.
+Executor RAM memory should not be less than 1.5 * of spark reserved memory.(single core executor memory should not be les than 450 MB)
+RAM Memory for each executor = CPU cores for each executor * RAM memory for each core = 4 * 512 MB = 2 GB
 That means if we give 2 GB memory then only it will process 4 task in parallel.
 Suppose, if we give 1 GB instead of 2 GB then we have to reduce the number of cores or the job wil get failed.
 
@@ -49,6 +49,35 @@ NOTE: Suppose there is no performance issue for client that means the client is 
 
 -------------------------------------------------------------------------------------------------------
 
+
+
+Process 100GB/1TB of data.
+
+1. how many executors are required?
+2. how many cores are required?
+3. what will be the driver size?
+4. what will be the driver memory?
+
+real time example:
+we have 16 machines: 2 master(1 standby master) and 14 worker machines.
+
+all master and workers machines are connected to each other.
+master knows each and every worker machine configuration like IP, memory, etc.
+
+RAM: 128GB per machine
+Total RAM: 128GB * 14 workers = 1792GB = 1.8TB
+
+CORES: 48 CPU per machine
+Total CORES: 48 * 14 = 672 CPU CORES
+
+These total RAM and CORES are divided into 5 teams in a firm.
+And each team is running multiple spark applications having different size as shown below:
+Team1 = app1, app2, app3
+Team2 = app1, app2, app3, app4, app5, app6, app7
+Team3 = app1, app2
+Team4 = app1
+Team5 = app1, app2, app3, app4, app5
+Total = 18 spark applications
 
 
 
