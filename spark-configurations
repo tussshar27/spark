@@ -79,7 +79,7 @@ Team4 = app1
 Team5 = app1, app2, app3, app4, app5
 Total = 18 spark applications
 
-Calculation:
+Reverse Calculation:
 1 CPU core and 1GB RAM is reserved for the worker node to send a heartbeat.
 So,
 Total RAM: (128GB-1GB) * 14 workers = 1778GB ~= 1.8TB
@@ -99,6 +99,41 @@ Team3 = app1, app2, app3
 Team4 = app1, app2, app3
 Team5 = app1, app2, app3
 but for real world scenario it won't work since each team is working on different spark application with different configuration size.
+
+Real Calculation:
+Ask the questions mentioned below first:
+1) Requirement gathering for 100GB of data-
+1. Type of data: csv, parquet, json, XML, etc
+2. Type of transformation: multiple joins or joining with 10GB of external data or wide transformations or dumping the data using select statement, etc
+3. Single vs multiple sources: suppose 10GB comes from DB and 90GB comes from file system.
+4. Any SLA (Service Level Agreement): time should be taken by spark job to complete, eg: 30mins, 1hr, 2hr, etc
+
+2) Cluster configuration-
+what is your cluster configuration?
+
+3)Your approach/mindset-
+Calculate the partitions:
+main data = 100GB = 800 partitions = 125mb partition size
+external data join during transformation data = 10GB = 80 partitions = 125mb partition size
+then, total data 110GB.
+
+Approach1: 
+lets say we have more than 50GB data then take its half as RAM which is 25GB and check whether the SLA is met or not, it should be done in trial and error basis.
+if data is of 10GB then RAM 20GB, 1GB then RAM 4GB+1GB additional memory.
+so if the data is big then we divide it and if the data is small then we double it.
+
+for 110gb data, considering 60gb RAM = 15GB RAM per executor, 5 cores per executor, 4 executors. so 15*4=60GB.
+60GB RAM is divided in three memories:
+300mb * 4machines = 1.2gb of reserve memory
+60% of 59gb = 36gb of storage executor memory
+40% of 59gb = 24gb of user memory
+
+optimization is done in above storage executor memory and user memory as shown below we have to do trial and error to check SLA.
+can we run it in 70%-30% configuration?
+can we run it in 50%-50% configuration?
+
+
+
 
 
 
