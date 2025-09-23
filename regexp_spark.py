@@ -1,22 +1,22 @@
-To extract error lines with timestamps from a log file in PySpark, you can follow these steps:.
+# To extract error lines with timestamps from a log file in PySpark, you can follow these steps:.
 
-Load the log file into a DataFrame or RDD.
-Use a regular expression to identify lines with error messages and extract the timestamps.
-Filter the lines that contain errors.
-Optionally, convert the timestamp into a proper format (if necessary).
-Here’s a PySpark script that demonstrates this:
+# Load the log file into a DataFrame or RDD.
+# Use a regular expression to identify lines with error messages and extract the timestamps.
+# Filter the lines that contain errors.
+# Optionally, convert the timestamp into a proper format (if necessary).
+# Here’s a PySpark script that demonstrates this:
 
-Sample Log Format (Assumed):
-------------------
-2024-10-21 12:30:15 INFO Starting process...
-2024-10-21 12:30:20 ERROR Process failed due to connection timeout
-2024-10-21 12:31:15 INFO Retrying process...
-2024-10-21 12:31:25 ERROR Process failed again due to insufficient memory
-------------------
+# Sample Log Format (Assumed):
+# ------------------
+# 2024-10-21 12:30:15 INFO Starting process...
+# 2024-10-21 12:30:20 ERROR Process failed due to connection timeout
+# 2024-10-21 12:31:15 INFO Retrying process...
+# 2024-10-21 12:31:25 ERROR Process failed again due to insufficient memory
+# ------------------
                                                         
-PySpark Code:
-python
-Copy code
+# PySpark Code:
+# python
+# Copy code
 from pyspark.sql import SparkSession
 from pyspark.sql.functions import regexp_extract, col
 
@@ -45,18 +45,19 @@ error_logs_with_timestamp_df.show(truncate=False)
 # Optionally, save the result to a file
 output_path = "path_to_output_error_log.txt"
 error_logs_with_timestamp_df.write.mode("overwrite").text(output_path)
-Explanation:
-logs_df = spark.read.text(log_file_path): Reads the log file into a DataFrame, with each line treated as a single string in the "value" column.
-regexp_extract: Extracts the timestamp using the defined regex pattern.
-filter(logs_with_timestamp_df["value"].contains(error_pattern)): Filters out the lines that contain the "ERROR" keyword.
-select("timestamp", "value"): Displays the timestamp and the full error line.
-Saving to file: The result can be saved to a text file for further analysis.
 
-Output (Sample):
-+-------------------+------------------------------------------------------------+
-|timestamp          |value                                                       |
-+-------------------+------------------------------------------------------------+
-|2024-10-21 12:30:20|2024-10-21 12:30:20 ERROR Process failed due to connection timeout|
-|2024-10-21 12:31:25|2024-10-21 12:31:25 ERROR Process failed again due to insufficient memory|
-+-------------------+------------------------------------------------------------+
-This code can be adapted to any log file format by modifying the regular expressions accordingly.
+# Explanation:
+logs_df = spark.read.text(log_file_path)  # Reads the log file into a DataFrame, with each line treated as a single string in the "value" column.
+# regexp_extract: Extracts the timestamp using the defined regex pattern.
+filter(logs_with_timestamp_df["value"].contains(error_pattern))  #Filters out the lines that contain the "ERROR" keyword.
+select("timestamp", "value")  #Displays the timestamp and the full error line.
+# Saving to file: The result can be saved to a text file for further analysis.
+
+# Output (Sample):
+# +-------------------+------------------------------------------------------------+
+# |timestamp          |value                                                       |
+# +-------------------+------------------------------------------------------------+
+# |2024-10-21 12:30:20|2024-10-21 12:30:20 ERROR Process failed due to connection timeout|
+# |2024-10-21 12:31:25|2024-10-21 12:31:25 ERROR Process failed again due to insufficient memory|
+# +-------------------+------------------------------------------------------------+
+# This code can be adapted to any log file format by modifying the regular expressions accordingly.
