@@ -72,15 +72,15 @@ df.select('id','name','salary','deptname').createOrReplaceGlobalTempView('table2
 df = spark.read.format('json').option('mergeSchema','true').option('mode','PERMISSIVE').load('path/to/load')
 df.write.format('delta').option('mode','append').option('mergeSchema'.'true').save('path/to/existing/write')
 
-OPTIMIIZE delta_table			..will coalesce partitions
+# OPTIMIIZE delta_table			..will coalesce partitions
 
-OPTIMIZE delta_table ZORDER BY (order_date)		..will coalesce partitions and sort the data inside it.
+# OPTIMIZE delta_table ZORDER BY (order_date)		..will coalesce partitions and sort the data inside it.
 
-string_agg in MSSQL:
-collect_list in pyspark:
+# string_agg in MSSQL:
+# collect_list in pyspark:
 df.groupBy(col('deptid')).agg(collect_list(col('name')).alias('name_list'))
 
-df.groupBy(col('deptid')).agg(collect_set(col('name')).alias('name_list'))			..removes duplicates
+df.groupBy(col('deptid')).agg(collect_set(col('name')).alias('name_list'))			#removes duplicates
 
 df = df.withColumn('fullname',concat_ws(' ',col('firstname'),col('lastname')))
 
@@ -106,7 +106,7 @@ id int null,
 name string
 )
 using DELTA;
-NOTE: everything is stored in form of files.
+# NOTE: everything is stored in form of files.
 
 create table db.raw.ext_table(
 id int null,
@@ -116,16 +116,16 @@ using DELTA
 LOCATION 'abfss://raw@storageaccount/ext_table';		..just by giving location, we can create external table.
 
 %sql
-seelct * from delta.'path'
+select * from delta.'path'
 
--- Shallow Clone
+# -- Shallow Clone
 CREATE TABLE new_table_name SHALLOW CLONE source_table_name;
 
--- Deep Clone
+# -- Deep Clone
 CREATE TABLE new_table_name DEEP CLONE source_table_name;
 
---what are transformations?
-transformations are operations on existing RDDs/dataframes that produce new RDDs/dataframes.
+# -- what are transformations?
+# transformations are operations on existing RDDs/dataframes that produce new RDDs/dataframes.
 
 use of parallelize(), map(), filter(), flatmap() and reduce() in spark:
 1. parallelize(): it is used to create a new rdd from a list in python or scala.
