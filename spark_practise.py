@@ -1,3 +1,28 @@
+# Spark is an open source unified computing engine with a set of libraries for parallel data processing on computer cluster.
+# it is 100x faster than hadoop mapreduce because it process data in RAM instead of disk which hadoop uses.
+# spark is built on scala.
+
+
+spark components: low level
+               +-----------------------+
+               |     Spark Streaming    |
+               +-----------------------+
+               |        Spark SQL       |
+               +-----------------------+
+               |         MLlib          |
+               +-----------------------+
+               |         GraphX         |
+               +-----------------------+
+               |       Spark Core       |
+               +-----------------------+
+
+high level:
+Libraries , Structured streaming and advanced analytics
+structured API - DataFrames, Datasets and SQL
+low level API - RDD and distributed variables
+
+
+
 from pyspark.sql.types import *
 from pyspark.sql.functions import *
 
