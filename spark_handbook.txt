@@ -4,7 +4,7 @@ Spark Architecture:
 
 2. cluster manager: it is the resource manager.
 
-3. executors: are the workers.
+3. executors: are the workers on the site. each executor is a JVM container running on a different machine
 
 together forms master-slave architecture.
 
@@ -12,4 +12,34 @@ Apache spark:
 it is an open source, distributed data processing engine designed for speed and ease to use.
 features:
 1. (RAM) in-memory processing, allows it to run 100x faster than Hadoop mapreduce having (Disk) processing.
+
+Flow of spark application run:
+below is the step-by-step flow when you submit a spark job.
+1. Submission: user submits spark application (JAR/python file) to the cluster.
+2. Driver starts: the cluster manager starts the driver program on one of the node in the cluster.
+3. SparkContext Registration: the driver starts the SparkContext.
+4. Resource Acquisition: SparkContext asks the cluster manager for resources (Executors).
+5. Executor Launch: the cluster manager launches executors on the worker nodes and report their network addresses back to the driver.
+6. Task Assignment: the driver now talks directly to the executors. it sends the application code and tasks to the executors.
+7. Execution: each executor runs the tasks on its portion of the data, performing transformations and actions.
+8. Result collection: the executors return the results or the status of the tasks back to the driver.
+9. Shutdown: once the job is complete, the SparkContext stops, and the cluster manager shuts down the executors, freeing up resources for other applications.
+
+Diagram:
+[Client Machine]
+     |
+     ↓ (submit job)
+[Driver Program] ←---→ [Cluster Manager]
+     |                      |
+     ↓ (coordinates)        ↓ (allocates)
+    [Executors on Worker Nodes]
+     |
+     ↓ (parallel processing)
+[Task][Task][Task]... across cluster
+
+
+
+
+
+
 
