@@ -1,4 +1,15 @@
-Part 1.
-Chapter 1.
-- unified computing system/engine(UCS): data center architecture that integrates computing, networking and storage resources to increase efficiency and enable centralized management.  
-- apache spark: 
+Spark Architecture:
+
+1. driver: acts as an architect. has the blueprint (application code) and co-ordinates all the work.
+
+2. cluster manager: it is the resource manager.
+
+3. executors: are the workers.
+
+together forms master-slave architecture.
+
+Apache spark:
+it is an open source, distributed data processing engine designed for speed and ease to use.
+features:
+1. (RAM) in-memory processing, allows it to run 100x faster than Hadoop mapreduce having (Disk) processing.
+
