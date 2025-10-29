@@ -1,12 +1,28 @@
 Spark Architecture:
 
 1. driver: acts as an architect. has the blueprint (application code) and co-ordinates all the work.
+it is the heart of the spark application.
+it manages information and state of executors.
+analyzes, distributes and schedules the work on executors.
 
 2. cluster manager: it is the resource manager.
 
-3. executors: are the workers on the site. each executor is a JVM container running on a different machine
+3. executors: are the workers on the site. each executor is a JVM container running on a different machine.
+it execute the code.
+report the status of execution to the driver.
 
 together forms master-slave architecture.
+
+Points:
+1. each task can only work on one partition of data at a time.
+2. executors host cores and each core can run 1 task at a time.
+3. tasks can execute in parallel.
+4. to allow every executors to work in parallel, spark breaks down the data into chunks called partitions.
+
+working:
+1. user assign job to driver.
+2. driver internally analyzes , distributes and breaks down job into stages and tasks and assign it to executors.
+3. executors consist JVM containers and cores. 
 
 Apache spark:
 it is an open source, distributed data processing engine designed for speed and ease to use.
