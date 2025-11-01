@@ -53,6 +53,113 @@ Diagram:
      ↓ (parallel processing)
 [Task][Task][Task]... across cluster
 
+1. Partition: To allow every executor to work in parallel, spark breaks down the data into chunks called partitions.
+
+2. Transformation: The instructions or code that we write in order to modify/transform our data.
+Eg. select, where, groupBy, etc.
+Two types:
+a. Narrow Transformation: (one to one) one partition contribute transformation to one partition
+b. Wide Transformation: (one to many) one partition contribute transformation to multiple partitions. lead to data shuffle.
+Transformation help in building the logical plan.
+Logical plan:
+
+         Emp
+          │
+          ▼
+       +--------+
+       |  Data  |
+       +--------+
+          │
+  -- Transformation: where Sal > 160000
+          │
+          ▼
+       +--------+
+       |  Data  |
+       +--------+
+          │
+ -- Transformation: select name, dept_id, salary
+          │
+          ▼
+       +--------+
+       |  Data  |
+       +--------+
+          │
+    -- Transformation: group by dept_id
+          │
+          ▼
+     +--------------+
+     |  Final Data  |
+     +--------------+
+
+3. Action: In order to execute the logical plan what transformation creates, action is created.
+Action triggers the execution plan.
+Three types:
+a. View data
+b. Collect data
+c. Write data
+
+when an action is called:
+Eg. .show()
+a. Spark analyzes the logical plan
+b. Optimizes it into an execution plan
+c. Executes the plan on the cluster
+
+Computation Graph: It is the logical plan created by all transformations.
+
+4. Lazy Evaluation: Spark does not execute any transformations until an action is called.
+so spark will wait for action trigger in order to execute the computation graph.
+But why spark does that?
+Eg. Sandwitch analogy: A customer asked for a white bread sandwitch and the chef started making it. later customer changes its requirement to have a brown bread sandwitch. due to this the chef time got wasted and the white bread and other ingredients also got wasted. to avoid this wastage in future, chef decided to take money first (Action) then start preparation of food. so here money becomes action and food making becomes transformations.
+Due to similar scenario, spark waits for all transformations code so that to form chronology of optimized execution plan using Catalyst optimizer and perform all the transformations once action is triggered.
+
+5. Spark Session: Spark session is the entry point of spark execution. The driver process is known as spark session.
+
+What is an API?
+API is a bridge that allows to services to communicate with each other without knowing how the data is prepared in its origin
+Eg. just like how a waiter takes your order from you and brings back your food from the kitchen. And here you don't need to know how the kitchen makes the food.
+An API defines how software components should interact.
+It exposes specific endpoints (URLs) and methods that other systems can call.
+here in spark there High level APIs (Dataframe, Dataset, SQL) and Low Level APIs (RDD)
+Spark Eg.:
+df = spark.read.csv("path/to/data.csv", header=True)
+df.filter(df["age"] > 30).select("name", "age").show()
+- spark.read.csv() → part of the DataFrameReader API
+- filter() and select() → part of the DataFrame API
+- show() → part of the action API
+
+what is a Dataframe?
+Dataframe is the structured API, represented like a table.
+table is formed by rows and columns.
+Dataframe has schemas, which is the metadata for the columns.
+Data is stored in partitions.
+it is immutable means it cannot be modified, new dataframe can be created out of that dataframe.
+Diagram:
+                         +-------------------+
+                         |   DataFrame 1     |
+                         |   (emp_data)      |
+                         +-------------------+
+                                   │
+                                   │ where sal > 100000
+                                   ▼
+                         +-------------------+
+                         |   DataFrame 2     |
+                         +-------------------+
+                                   │
+                                   │ select (name, dept_id, sal)
+                                   ▼
+                         +-------------------+
+                         |   DataFrame 3     |
+                         +-------------------+
+                    
+
+Notes:
+- **Immutability:** In Spark, DataFrames are immutable. Once created, they cannot be changed.
+- **Cascade of Transformations:** Each transformation (e.g., `where`, `select`) returns a new DataFrame.
+- **Lazy Evaluation:** These transformations only build a *logical plan*. Actual computation happens when an *action* (like `show()`, `collect()`, or `write()`) is triggered.
+- **Optimization:** The Catalyst optimizer combines and optimizes all transformations before execution.
+
+
+
 
 
 
