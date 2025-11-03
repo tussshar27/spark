@@ -58,7 +58,32 @@ emp.rdd.getNumPartitions()
 
 # Write data as CSV output (ACTION)
 emp_final.write.format("csv").save("data/output/1/emp.csv")
-	
+
+# Schema for emp
+emp.schema
+#output:
+StructType([StructField('employee_id', StringType(), True), StructField('department_id', StringType(), True), StructField('name', StringType(), True), StructField('age', StringType(), True), StructField('gender', StringType(), True), StructField('salary', StringType(), True), StructField('hire_date', StringType(), True)])
+
+emp.printSchema()
+
+#creating small dataframe
+# Small Example for Schema
+from pyspark.sql.types import StructType, StructField, StringType, IntegerType
+schema_string = "name string, age int"
+
+schema_spark =  StructType([
+    StructField("name", StringType(), True),
+    StructField("age", IntegerType(), True)
+])
+
+#select on dataframe:
+		 
+# SELECT columns
+# select employee_id, name, age, salary from emp
+
+emp_filtered = emp.select(col("employee_id"), expr("name"), emp.age, emp.salary)		#The expr() function in Spark (from pyspark.sql.functions) lets you use SQL expressions directly in DataFrame APIs.
+emp_filtered.show()
+		 
 from pyspark.sql.types import *
 from pyspark.sql.functions import *
 
