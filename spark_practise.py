@@ -24,6 +24,8 @@ low level API - RDD and distributed variables
 to create spark session:
 # Spark Session
 from pyspark.sql import SparkSession
+from pyspark.sql.types import *
+from pyspark.sql.functions import *
 
 spark = (
     SparkSession
@@ -101,7 +103,7 @@ emp_casted_1 = emp_filtered.selectExpr("employee_id as emp_id", "name", "cast(ag
 emp_casted_1.show()
 
 #Bonus Tip:
-#spark has a built-in function which converts your basic schema string to the spark native datatype without any need of eritiny
+#spark has a built-in function which converts your basic schema string to the spark native datatype.
 schema_string = "name string, age int"
 from pyspark.sql.types import _parse_datatype_string
 df_sch_str = _parse_datatype_string(df_sch_str)
@@ -111,8 +113,6 @@ df_sch_str
 StructType([StructField('name', StringType(), True), StructField('age', IntegerType, True)]), True)]), True)]) 
 																 
 
-from pyspark.sql.types import *
-from pyspark.sql.functions import *
 
 df.show()
 
