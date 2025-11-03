@@ -21,8 +21,44 @@ Libraries , Structured streaming and advanced analytics
 structured API - DataFrames, Datasets and SQL
 low level API - RDD and distributed variables
 
+to create spark session:
+# Spark Session
+from pyspark.sql import SparkSession
 
+spark = (
+    SparkSession
+    .builder
+    .appName("Spark Introduction")
+    .master("local[*]")
+    .getOrCreate()
+)
 
+#command to check session is created
+spark
+
+#to create a dataframe
+emp_data = [
+    ["001","101","John Doe","30","Male","50000","2015-01-01"],
+    ["002","101","Jane Smith","25","Female","45000","2016-02-15"],
+    ["003","102","Bob Brown","35","Male","55000","2014-05-01"],
+    ["004","102","Alice Lee","28","Female","48000","2017-09-30"],
+    ["005","103","Jack Chan","40","Male","60000","2013-04-01"]
+]
+
+emp_schema = "employee_id string, department_id string, name string, age string, gender string, salary string, hire_date string"
+
+emp = spark.createDataFrame(data=emp_data, schema=emp_schema)
+emp.show()
+
+# Write our first Transformation (EMP salary > 50000)
+emp_final = emp.where("salary > 50000")
+
+#to check the number of partitions created
+emp.rdd.getNumPartitions()
+
+# Write data as CSV output (ACTION)
+emp_final.write.format("csv").save("data/output/1/emp.csv")
+	
 from pyspark.sql.types import *
 from pyspark.sql.functions import *
 
