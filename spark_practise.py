@@ -147,9 +147,11 @@ df = df.withColumn('month',month(col('date')))\
 		
 df = df.withColumn('status',when(col('flag')==1,'Yes').when(col('flag)==0,'No').otherwise(None))
 
+#to create table from dataframe 
 df.createOrReplaceGlobalTempView('table1')
 spark.sql("select * from table1")
 
+#to create dataframe from table 
 df_tble1 = spark.table('table1')
 
 df.select('id','name','salary','deptname').createOrReplaceGlobalTempView('table2')
