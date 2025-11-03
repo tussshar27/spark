@@ -128,6 +128,7 @@ df.filter(df["age"] > 30).select("name", "age").show()
 - show() → part of the action API
 
 what is a Dataframe?
+"A DataFrame in Apache Spark is a distributed collection of data organized into named columns, similar to a table in a relational database."
 Dataframe is the structured API, represented like a table.
 table is formed by rows and columns.
 Dataframe has schemas, which is the metadata for the columns.
@@ -158,9 +159,44 @@ Notes:
 - **Lazy Evaluation:** These transformations only build a *logical plan*. Actual computation happens when an *action* (like `show()`, `collect()`, or `write()`) is triggered.
 - **Optimization:** The Catalyst optimizer combines and optimizes all transformations before execution.
 
+spark internally does this:
+User Code
+   │
+   ▼
+Unresolved Logical Plan  ← Columns, tables not yet verified
+   │
+   ▼
+Analyzed Logical Plan    ← Validated schema, column names, etc.
+   │
+   ▼
+Optimized Logical Plan   ← Catalyst optimizer applies rules
+   │
+   ▼
+Physical Plan            ← Actual execution strategy
+   │
+   ▼
+Execution on cluster     ← RDD tasks sent to executors
 
+what is DAG?
+DAG stands for Directed Acyclic Graph.
+It’s a graph-based representation of all the transformations (like select, filter, groupBy, etc.) that Spark needs to perform on your data.
+In simple terms:
+👉 A DAG is the execution plan Spark builds before running your job.
 
+Practical:
+#creating spark session object
+from pyspark.sql import SparkSession          #importing SparkSession class
 
+spark = (
+     SparkSession
+     .builder                         # using builder method from SparkSession class
+     .appName("Spark Inroduction")     #giving name to our spark session object
+     .master("local[*]")     #location where the code will be executed
+     .getOrCreate()
+)
+
+#For every spark object that we create, spark provided its application spark UI in output.
+localhost:4040
 
 
 
