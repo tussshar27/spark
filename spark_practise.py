@@ -65,6 +65,12 @@ emp.schema
 StructType([StructField('employee_id', StringType(), True), StructField('department_id', StringType(), True), StructField('name', StringType(), True), StructField('age', StringType(), True), StructField('gender', StringType(), True), StructField('salary', StringType(), True), StructField('hire_date', StringType(), True)])
 
 emp.printSchema()
+#output:
+root
+ |-- emp_id: string (nullable = true)
+ |-- name: string (nullable = true)
+ |-- age: integer (nullable = true)
+ |-- salary: string (nullable = true)
 
 #creating small dataframe
 # Small Example for Schema
@@ -81,9 +87,30 @@ schema_spark =  StructType([
 # SELECT columns
 # select employee_id, name, age, salary from emp
 
+
+# Filter emp based on Age > 30
+# select emp_id, name, age, salary from emp_casted where age > 30
+emp_final = emp_casted.select("emp_id", "name", "age", "salary").where("age > 30")
+		 
+#expr()
 emp_filtered = emp.select(col("employee_id"), expr("name"), emp.age, emp.salary)		#The expr() function in Spark (from pyspark.sql.functions) lets you use SQL expressions directly in DataFrame APIs.
 emp_filtered.show()
-		 
+
+#selectExpr()
+emp_casted_1 = emp_filtered.selectExpr("employee_id as emp_id", "name", "cast(age as int) as age", "salary")
+emp_casted_1.show()
+
+#Bonus Tip:
+#spark has a built-in function which converts your basic schema string to the spark native datatype without any need of eritiny
+schema_string = "name string, age int"
+from pyspark.sql.types import _parse_datatype_string
+df_sch_str = _parse_datatype_string(df_sch_str)
+df_sch_str
+
+#output:
+StructType([StructField('name', StringType(), True), StructField('age', IntegerType, True)]), True)]), True)]) 
+																 
+
 from pyspark.sql.types import *
 from pyspark.sql.functions import *
 
