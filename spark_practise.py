@@ -185,6 +185,16 @@ df = df.withColumn("current_date", current_date())\
 		.withColumn("current_timestamp", current_timestamp())
 df.show(truncate=False)
 
+#convert date to string
+# there are hundreds of abbreviation to use with date_format() function. refer spark documentation for more info.
+from pyspark.sql.functions import date_format
+df = df.withColumn("date_string",date_format(col("hire_date"),"dd/MM/yyyy"))\
+		.withColumn("date_year",date_format(col("hire_date"),"yyyy"))\
+		.withColumn("date_month",date_format(col("hire_date"),"MM"))
+#same we can do for timestamp, refer spark doc in order to get hour, minute or second.
+df.show()
+
+
 #removing records having any null value
 df = df.na.drop()
 #OR
@@ -204,9 +214,15 @@ df_drop_thresh = df.dropna(thresh=2)
 from pyspark.sql.functions import col, lit, coalesce
 df = df.withColumn("new_gender",coalesce(col("gender"),lit("O")))
 
+#drop old columns and fix new columns
+#The reason withColumn is not imported from pyspark.sql.functions is because it is a method of the DataFrame class, not a standalone Spark SQL function.
+df = df.drop("name","gender")\
+		.withColumnRenamed("new_name","name")\
+		.withColumnRenamed("new_gender","gender")
+df.show()
 
-
-
+#write final data to csv
+df.write.format("csv").save("/data/output/file.csv")
 
 df.explain(extended=True)
 
