@@ -112,9 +112,101 @@ df_sch_str
 #output:
 StructType([StructField('name', StringType(), True), StructField('age', IntegerType, True)]), True)]), True)]) 
 																 
+#cast() using spark dataframe API
+from pyspark.sql.functions import col, cast
+df.select(col("emp_id").cast("int"),"name","age",col("salary").cast("double"))
+df.printSchema()
 
-
+#create multiple new columns or overwrite existing column
+#old method
+df = df.withColumn("tax",col("salary")*0.2).withColumn("pension",col("salary")*0.1)
 df.show()
+
+#new method for spark >= 3.4
+#NOTE: if your code is inside parentheses, brackets, or braces, Python automatically allows implicit line continuation — no backslash is needed.
+df = df.withColumns({"tax":col("salary")*0.2, 
+					 "pension":col("salary")*0.1})
+
+#static value new column
+from pyspark.sql.functions import lit
+df = df.withColumn("flag",lit("Y"))
+df.show()
+
+#rename a column
+df = df.withColumnRenamed("employee_id","emp_id")
+df.show()
+
+#renaming using expr() or selectExpr(), these both are transformations, not actions
+df.select("id","name",expr("employee_id as emp_id")).show()
+df.selectExpr("id","name","employee_id as emp_id").show()
+
+#removing multiple existing column
+df = df.drop("column1","column2")
+df.show()
+
+#filter data
+df = df.filter("salary > 10000")
+df.show()
+
+#LIMIT data
+df = df.limit(5)	#if we want to write data.
+df.show()
+OR
+df.show(5)	#directly do it in console without writing data.
+
+#case when statement
+from pyspark.sql.functions import when, col
+#NOTE: otherwise() is not imported b/c it is chained to when()
+#pyspark follows python syntax that's why == is used instead of = .
+#also \ is not used as a line breaker b/c withColumn() is opened.
+#in py, None is given instead of null but in output it will show null.
+df = df.withColumn("new_gender",when(col("gender")=="Male","M")
+				  .when(col("gender")=="Female","F")
+				  .otherwise("None")
+				  )
+df.show()
+#OR
+df = df.withColumn("new_gender",expr("case when gender = 'Male' then 'M' when gender = 'Female' then 'F' else null end"))
+df.show()
+
+#regexp_replace()
+from pyspark.sql.functions import regexp_replace
+df = df.withColumn("new_name",regexp_replace(col("name"),'J','Z'))
+df.show()
+
+#convert string datatype to date
+from pyspark.sql.functions import col, to_date
+df = df.withColumn("new_hire",to_date(col("new_hire"),"yyyy-MM-dd"))
+df.printSchema()
+
+#create new columns having current data and timestamp
+from pyspark.sql.functions import current_date, current_timestamp
+df = df.withColumn("current_date", current_date())\
+		.withColumn("current_timestamp", current_timestamp())
+df.show(truncate=False)
+
+#removing records having any null value
+df = df.na.drop()
+#OR
+df = df.dropna()
+
+#Drop rows only if all columns are null
+df = df.dropna(how="all")
+
+#Drop rows based on specific columns
+df_drop_subset = df.dropna(subset=["name"])
+
+#Threshold-based drop (minimum non-null columns required)
+df_drop_thresh = df.dropna(thresh=2)
+
+#fixing null values
+#in prod, we can't drop any records.
+from pyspark.sql.functions import col, lit, coalesce
+df = df.withColumn("new_gender",coalesce(col("gender"),lit("O")))
+
+
+
+
 
 df.explain(extended=True)
 
