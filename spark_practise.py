@@ -284,12 +284,31 @@ df.show()
 #col(): col() function is used when we perform transformation or use filter on top of that column.
 
 #analytical window functions
-#SQL: select dept_id, max(salary) over(partition by dept_id) as max_sal from emp;
+
 from pyspark.sql.window import Window
-from pyspark.sql.functions import col
+from pyspark.sql.functions import col, max, desc, row_number
+
+#Eg1.
+#SQL: select dept_id, max(salary) over(partition by dept_id) as max_sal from emp;
 window_spec = Window.partitionBy(col("dept_id"))
 df = df.withColumn("max_salary",max(col("salary")).over(window_spec))
 df.show()
+
+#Eg2.
+#SQL: select e.* from (select dept_id, row_number() over(partition by dept_id order by salary) as emp_rank from emp) e where e.emp_rank = 1;
+window_spec = Window.partitionBy(col("dept_id")).orderBy(col("salary").desc())
+df = df.withColumn("emp_rank",row_number().over(window_spec))
+df = df.filter(col("emp_rank") == 1)					#same as df = df.filter("emp_rank == 1")
+df.show()
+
+#using expr
+from pyspark.sql.functions import expr
+df = df.withColumn("max_salary", expr("row_number() over(partition by dept_id order by salary desc)")).filter("max_salary == 2")))
+df.show()
+
+
+
+
 
 
 
