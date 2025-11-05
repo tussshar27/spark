@@ -236,6 +236,11 @@ df.show()
 df = df_1.unionAll(df_2)
 df.show()
 
+#scenario: what if the two dataframes have same columns with same datatypes but the column sequence is different?
+#unionByName()
+df = df_1.unionByName(df_2)
+df.show()
+
 #sorting
 from pyspark.sql.functions import asc, desc, col
 df = df.orderBy(col("salary").desc())
@@ -257,8 +262,15 @@ df = df.groupBy("dept_id") \
 
 df.show()
 
+#HAVING clause
+#SQL: select dept_id, count(emp_id) as emp_count form employee group by dept_id having count(emp_id) > 2 ;
+from pyspark.sql.functions import count, col
+df = df.groupBy(col("dept_id")).agg(count(col("emp_id")).alias("emp_count")).filter("emp_count > 2")
+df.show()
 
-
+#BONUS TIP
+#spark also provides count() function to get the count of records of a dataframe directly
+df.count()
 
 
 
