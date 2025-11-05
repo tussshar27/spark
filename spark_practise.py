@@ -170,6 +170,7 @@ df = df.withColumn("new_gender",expr("case when gender = 'Male' then 'M' when ge
 df.show()
 
 #regexp_replace()
+#in sql, SELECT name, REPLACE(name, 'J', 'Z') AS new_name FROM employee;
 from pyspark.sql.functions import regexp_replace
 df = df.withColumn("new_name",regexp_replace(col("name"),'J','Z'))
 df.show()
@@ -215,7 +216,7 @@ from pyspark.sql.functions import col, lit, coalesce
 df = df.withColumn("new_gender",coalesce(col("gender"),lit("O")))
 
 #drop old columns and fix new columns
-#The reason withColumn is not imported from pyspark.sql.functions is because it is a method of the DataFrame class, not a standalone Spark SQL function.
+#The reason withColumn() or withColumnRenamed() is not imported from pyspark.sql.functions is because it is a method of the DataFrame class, not a standalone Spark SQL function.
 df = df.drop("name","gender")\
 		.withColumnRenamed("new_name","name")\
 		.withColumnRenamed("new_gender","gender")
@@ -223,6 +224,49 @@ df.show()
 
 #write final data to csv
 df.write.format("csv").save("/data/output/file.csv")
+
+#UNION and UNION ALL
+#all the column names, its datatype and its column sequence should be same to perform.
+#union remove the duplicates whereas union all does not.
+#union:
+df = df_1.union(df_2)
+df.show()
+
+#unionAll:
+df = df_1.unionAll(df_2)
+df.show()
+
+#sorting
+from pyspark.sql.functions import asc, desc, col
+df = df.orderBy(col("salary").desc())
+df.show()
+df = df.orderBy(col("salary").asc())
+df.show()
+
+#aggregation:
+#SQL: select dept_id, count(emp_id) as emp_count from employee group by dept_id;
+#NOTE: not importing groupBy() and agg() b/c they are based on dataframe objects and not based on sql functions.
+
+from pyspark.sql.functions import count, sum
+
+df = df.groupBy("dept_id") \
+       .agg(
+           count("emp_id").alias("emp_count"),
+           sum("salary").alias("sal_sum")
+       )
+
+df.show()
+
+
+
+
+
+
+
+
+
+
+
 
 df.explain(extended=True)
 
