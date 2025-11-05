@@ -272,7 +272,24 @@ df.show()
 #spark also provides count() function to get the count of records of a dataframe directly
 df.count()
 
+#get unique data from dataframe
+#SQL: select distinct emp.* from emp;
 
+df = df.distinct()			#performing distinct() on all columns of dataframe
+df.show()
+#to get distinct department id
+df = df.select("dept_id").distinct()
+df.show()
+
+#col(): col() function is used when we perform transformation or use filter on top of that column.
+
+#analytical window functions
+#SQL: select dept_id, max(salary) over(partition by dept_id) as max_sal from emp;
+from pyspark.sql.window import Window
+from pyspark.sql.functions import col
+window_spec = Window.partitionBy(col("dept_id"))
+df = df.withColumn("max_salary",max(col("salary")).over(window_spec))
+df.show()
 
 
 
