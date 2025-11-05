@@ -306,6 +306,45 @@ from pyspark.sql.functions import expr
 df = df.withColumn("max_salary", expr("row_number() over(partition by dept_id order by salary desc)")).filter("max_salary == 2")))
 df.show()
 
+#to know the number of partitions our dataframe has:
+print(df.rdd.getNumPartitions())		#OR 		df.rdd.getNumPartitions()
+#output:
+8
+
+#REPARTITION (increase or decrease partitions) and COALESCE (decrease partitions):
+#repartition: data shuffling happens, guarantees uniform distribution
+#Eg1. reducing the number of partitions to 4
+df = df.repartition(4)
+df.rdd.getNumPartitions()
+#output:
+4
+
+#Eg1. increasing the number of partitions to 100
+df = df.repartition(100)
+df.rdd.getNumPartitions()
+#output:
+100
+
+#repartition data based on columns
+df = df.repartition(4, "dept_id")		#data is partitioned based on dept_id
+df.getNumPartitions()
+#output:
+4
+
+
+#coalesce: no data shuffling happens , and can't guarantee uniform data distribution
+#if the current partitions are 8 and you do 100 then also it will show 8 b/c it can't increase the partitions.
+df.getNumPartitions()
+df = df.coalesce(100)
+df.getNumPartitions()
+8
+
+#but we can decrease the number of partitions
+df = df.coalesce(3)
+df.getNumPartitions()
+3
+
+
 
 
 
