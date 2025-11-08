@@ -411,6 +411,45 @@ df = emp.join(
        (dept.dept_id.isNotNull())
 )
 
+#SPARK DEEP-DIVE
+#CREATE SPARK SESSION:
+from pyspark.sql import SparkSession		#importing SparkSession class
+spark = (
+	SparkSession
+	.builder								#create interface for SparkSession
+	.appName("Reading from CSV files")		#sets the name of your spark application , will be appear in spark UI, logs
+	.master("local[*]")						#it says to run spark locally with all the available CPU cores. local[2]-> to use only 2 cores locally. local not used for PROD
+	.getOrCreate()							#Returns an existing SparkSession if one already exists, otherwise creates a new one
+)
+
+
+#Before Spark 2.0, you had to create a SparkContext and then wrap it with a SQLContext or HiveContext:
+from pyspark import SparkContext
+from pyspark.sql import SQLContext
+sc = SparkContext()
+sqlContext = SQLContext(sc)
+
+#from above examples
+#what is SparkSession?
+1. SparkSession is a unified entry point introduced in Spark 2.0 that encapsulates the SparkContext and SQLContext. 
+2. It allows you to interact with both the lower-level RDD API and the higher-level DataFrame and SQL APIs.
+
+
+from pyspark.sql import SparkSession
+spark = (
+	SparkSession	#class
+	.builder		#initialize
+	.appName("My Spark Application")	#give name to session
+	.master("local[*]")					#inclusde all available CPU cores
+	.getOrCreate()				#create new session if it doesn't exist.
+)
+spark
+#spark UI link will be appeared in output once we run above code.
+Tabs inside Spark UI:
+Jobs	 Stages     Storage		Environment		Executors	  SQL/Dataframe
+
+
+
 
 
 
