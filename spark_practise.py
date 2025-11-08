@@ -344,6 +344,24 @@ df = df.coalesce(3)
 df.getNumPartitions()
 3
 
+#how repartition works under the hood?
+1. spark uses hash partitioning strategy to perform repartition with columns.
+2. for each row, it computes hash of the partition key.
+3. each partition has its own index [0 ... numPartitions-1]
+4. repartition maps thath hash to its partition index by using the formula: partition_index = nonNegativeHash(hash) % numPartitions Eg. 2 = 2 % 4
+5. all rows whose key hashes to the same index are placed into same partition
+
+#How to inspect which row went to which partition?
+1. by using spark_partition_index() we can find each row's partition index.
+2. Eg. creating a new column to get the partition index of each row whicle performing repartition:
+df = df.repartition(4,"dept_id").withColumn("partition",spark_partition_index())
+df.show()
+3. Eg. getting the distribution count of rows in each partition or to check partition Skew:
+from pyspark.sql.functions import col, count
+df.groupBy(col("partition")).count().show()	OR df.groupBy(spark_partition_id()).count().show()
+4. to check which dept_id value went to which partition:
+df.select("dept_id","partition").distinct().orderBy(col("partition").asc()).show(truncate=False)
+
 
 
 
