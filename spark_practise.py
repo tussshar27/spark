@@ -396,6 +396,21 @@ dept_id		partition
 df = emp.join(dept, how="inner", on=emp.dept_id==dept.dept_id)	OR	df = emp.alias("e").join(dept.alias("d"), how="inner", on=emp.dept_id==dept.dept_id)
 df.select("e.emp_id", "d.dept_id", "e.salary").show()		#put columns in "" when we use alias
 
+#LEFT OUTER JOIN:
+#SQL: select emp_id, dept_id, salary from emp left outer join dept on emp.dept_id = dept.dept_id ;
+df = emp.join(dept, how="left_outer", on=emp.dept_id==dept.dept_id)	OR	df = emp.alias("e").join(dept.alias("d"), how="left_outer", on=emp.dept_id==dept.dept_id)
+df.select("e.emp_id", "d.dept_id", "e.salary").show()		#put columns in "" when we use alias
+
+#ADVANCED CASCADING JOIN:
+1. join with cascading condition with dept_id and only for department 101 and 102 and not null/null conditions.
+df = emp.join(
+    dept,
+    how="left_outer",
+    on=(emp.dept_id == dept.dept_id) & 
+       ((dept.dept_id == "101") | (dept.dept_id == "102")) & 
+       (dept.dept_id.isNotNull())
+)
+
 
 
 
