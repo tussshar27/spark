@@ -448,7 +448,14 @@ spark
 Tabs inside Spark UI:
 Jobs	 Stages     Storage		Environment		Executors	  SQL/Dataframe
 
+#to read CSV data:
+df = spark.read.format("csv")\
+	.option("header",True)\
+	.option("inferSchema",True)\		#spark automatically identifies datatype of each column
+	.load("/data/input/emp.csv")
 
+#jobs are created when an action is called.
+#but here spark creates job while reading above csv file even there is no job because spark proactively creates job in order to identify the metadata.
 
 
 
