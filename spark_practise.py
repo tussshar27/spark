@@ -352,18 +352,49 @@ df.getNumPartitions()
 5. all rows whose key hashes to the same index are placed into same partition
 
 #How to inspect which row went to which partition?
-1. by using spark_partition_index() we can find each row's partition index.
+1. by using spark_partition_id() we can find each row's partition index.
 2. Eg. creating a new column to get the partition index of each row whicle performing repartition:
-df = df.repartition(4,"dept_id").withColumn("partition",spark_partition_index())
+from pyspark.sql.functions import spark_partition_id
+df = df.repartition(4,"dept_id").withColumn("partition",spark_partition_id())
 df.show()
 3. Eg. getting the distribution count of rows in each partition or to check partition Skew:
-from pyspark.sql.functions import col, count
+from pyspark.sql.functions import col, count, spark_partition_id
 df.groupBy(col("partition")).count().show()	OR df.groupBy(spark_partition_id()).count().show()
 4. to check which dept_id value went to which partition:
 df.select("dept_id","partition").distinct().orderBy(col("partition").asc()).show(truncate=False)
 
+#practical usecase: repartition
+when we perform df.withColumn("partition",spark_partition_id()).show() , we will see some of the dept_id are split into different partitions
+before repartition:
+Eg.
+dept_id		partition
+1				1
+1				1
+2				2
+3				3
+4				3
+1				3
+1				2
 
+we can see that dept_id = 1 is distributed in various partitions
+so to make it locate in same partition , we will use repartition which allocate same partitions for same dept_id using hash function
+df = df.repartition(3,"dept_id")
+df.show()
+after repartition:
+Eg.
+dept_id		partition
+1				1
+1				1
+2				2
+3				3
+4				3
+1				1
+1				1
 
+#INNER JOIN:
+#SQL: select emp_id, dept_id, salary from emp inner join dept on emp.dept_id = dept.dept_id ;
+df = emp.join(dept, how="inner", on=emp.dept_id==dept.dept_id)	OR	df = emp.alias("e").join(dept.alias("d"), how="inner", on=emp.dept_id==dept.dept_id)
+df.select("e.emp_id", "d.dept_id", "e.salary").show()		#put columns in "" when we use alias
 
 
 
