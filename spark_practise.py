@@ -451,7 +451,6 @@ Jobs	 Stages     Storage		Environment		Executors	  SQL/Dataframe
 #to read CSV data:
 df = spark.read.format("csv")\
 	.option("header",True)\
-	.option("inferSchema",True)\		#spark automatically identifies datatype of each column
 	.load("/data/input/emp.csv")
 
 df.printSchema()					#printSchema is not an action so it won't trigger spark job as it displays only the schema of metadata
@@ -459,12 +458,42 @@ df.printSchema()					#printSchema is not an action so it won't trigger spark job
 #jobs are created when an action is called.
 #but here spark creates job while reading above csv file even there is no action because spark proactively creates job in order to identify the metadata/header of a file.
 
-#if we read file without giving option header then spark will create 1 job > 1 stage > 1 task and it that task it will read 1 record which we can see from spark UI
-#but if we provide option header while reading file then spark will create 2 jobs > 1 stage each > 1 task each and 1 task will read one record and the other task will read all the records related to header (eg. 21).
+#if we read file without giving option header then spark will create 1 job > 1 stage > 1 task and in that task it will read 1 record which we can see from spark UI
+
+df = spark.read.format("csv")\
+	.option("header",True)\
+	.option("inferSchema",True)\		#spark automatically identifies datatype of each column
+	.load("/data/input/emp.csv")
+# if we run with inferSchema as True while reading file then spark will create 2 jobs > 1 stage each > 1 task each and 1 task will read one record and the other task will read all the records including header (eg. 20 records + 1 header).
+
+
+# now consider a case were we pre define schema.
+#then spark does not need to go and check for schema in the file.
+
+_schema = "emp_id int, dept_id int, name string, age int, gender string, salary double, hire_date date"
+df = spark.read.format("csv").option("header",True).schema("_schema").load("/data/input/emp.csv")
+
+#IMPORTANT:
+#now if we run above two commands, spark won't create any job because we have pre defined schema for spark so that spark won't check the metadata from the file itself.
+#and because if it spark won't create a job to read the file's schema.
+#that's why it is very important to define schema in production before reading the file, this will help spark to optimize the code.
+
+df.show()
+
+
 
 #inside Spark UI:
 Job link > Stage link > task link
 https://youtu.be/k2AVOmUS7i0?si=U8PAyr1JgI1m8bkX
+
+
+
+
+
+
+
+
+
 
 
 
