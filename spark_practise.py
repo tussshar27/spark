@@ -612,6 +612,278 @@ _options = {
 df = spark.read.format("csv").option(**_options).load("data.csv")
 df.show()
 
+#row format and columnar format:
+#sample data:
+| EMP_ID | EMP_NAME | SALARY |
+| ------ | -------- | ------ |
+| A001   | DEXTER   | 500    |
+| A002   | TOM      | 600    |
+| A003   | JERRY    | 1000   |
+
+#row format:
+A001,DEXTER,500,A002,TOM,600,A003,JERRY,1000
+
+#columnar format:
+A001,A002,A003,DEXTER,TOM,JERRY,500,600,1000
+
+Example: consider we need to find aggregatikon of salary.
+in case of row format, the system has to go from each column record in order to access salary column value of each row.
+but in columnar format, the system has to just read only the last column values which has all the salary value.
+so this is how columnar format can provide you a lot of optimization processing benefits when you want to do data analysis.
+
+#Comparison: PARQUET vs ORC vs AVRO
+| PROPERTY / FILE FORMAT | PARQUET            | ORC        | AVRO  |
+| ---------------------- | ------------------ | ---------- | ----- |
+| **COMPRESSION**        | Better             | Best       | Good  |
+| **READ / WRITE**       | Read               | Heavy Read | Write |
+| **ROW / COLUMNAR**     | Column             | Column     | Row   |
+| **SCHEMA EVOLUTION**   | Good               | Better     | Best  |
+| **EXAMPLE USE**        | Delta Lake / Spark | Hive       | Kafka |
+
+Recommended file format:
+1. for Spark / Delta Lake : PARQUET
+2. for Hive : ORC
+3. for Kafka : AVRO
+#IMPORTANT:
+#in columnar data format, if you read the column for data analysis then it will be beneficial.
+eg.
+	count(column1) >>> count()
+
+#NOTE: the default configuration of parquet and ORC is snappy.
+#to read parquet file:
+df = spark.read.format("parquet").load("data.parquet")
+df.printSchema()
+#output:
+  root
+ |-- emp_id: integer (nullable = true)
+ |-- emp_name: string (nullable = true)
+ |-- dept: string (nullable = true)
+ |-- salary: double (nullable = true)
+#we can see that spark automatically identified metadata of column because parquet stores both data and its metadata. so there is no need to use inferSchema() or predefined column datatypes.
+
+#to read multiple parquet files available inside a folder
+df = spark.read.format("parquet").load("/input/*.parquet")
+
+#to read ORC file:
+df = spark.read.format("orc").load("data.orc")
+df.printSchema()
+
+#BONUS TIP
+#recursiveFileLookup:
+#when data is stored in multiple different sub-folders and you want to access all the data together into one output then recursiveFileLookup is used.
+data/
+├── 2023/
+│   ├── jan/
+│   │   └── file1.parquet
+│   ├── feb/
+│   │   └── file2.parquet
+│
+└── 2024/
+    ├── jan/
+    │   └── file3.parquet
+    └── feb/
+        └── file4.parquet
+	
+df = spark.read.option("recursiveFileLookup", "true").format("parquet").load("data/")
+
+#working with JSON:
+singleline json:
+{"emp_id": 1, "name": "Tushar", "dept": {"id": 10, "name": "IT"}, "skills": ["PySpark", "SQL", "Azure"], "projects": [{"name": "DataLakeMigration", "duration": 6}, {"name": "ADFOptimization", "duration": 3}], "address": {"city": "Mumbai", "zip": 400022}}
+{"emp_id": 2, "name": "Ravi", "dept": {"id": 20, "name": "Finance"}, "skills": ["Python", "ETL"], "projects": [{"name": "ReportingSystem", "duration": 4}], "address": {"city": "Delhi", "zip": 110011}}
+{"emp_id": 3, "name": "Ankit", "dept": {"id": 30, "name": "HR"}, "skills": ["Excel", "PowerBI"], "projects": [], "address": {"city": "Pune", "zip": 411001}}
+
+#here struct means dictionary
+printSchema():
+root
+ |-- address: struct (nullable = true)
+ |    |-- city: string (nullable = true)
+ |    |-- zip: long (nullable = true)
+ |-- dept: struct (nullable = true)
+ |    |-- id: long (nullable = true)
+ |    |-- name: string (nullable = true)
+ |-- emp_id: long (nullable = true)
+ |-- name: string (nullable = true)
+ |-- projects: array (nullable = true)
+ |    |-- element: struct (containsNull = true)
+ |    |    |-- name: string (nullable = true)
+ |    |    |-- duration: long (nullable = true)
+ |-- skills: array (nullable = true)
+ |    |-- element: string (containsNull = true)
+
+df.show(truncate=False)
++-------+-------+-------+---------+--------+------+--------------------------------------------+--------+
+|emp_id |name   |dept_id|dept_name|city    |zip   |projects                                   |skill   |
++-------+-------+-------+---------+--------+------+--------------------------------------------+--------+
+|1      |Tushar |10     |IT       |Mumbai  |400022|[{DataLakeMigration, 6}, {ADFOptimization, 3}]|PySpark|
+|1      |Tushar |10     |IT       |Mumbai  |400022|[{DataLakeMigration, 6}, {ADFOptimization, 3}]|SQL    |
+|1      |Tushar |10     |IT       |Mumbai  |400022|[{DataLakeMigration, 6}, {ADFOptimization, 3}]|Azure  |
+|2      |Ravi   |20     |Finance  |Delhi   |110011|[{ReportingSystem, 4}]                     |Python  |
+|2      |Ravi   |20     |Finance  |Delhi   |110011|[{ReportingSystem, 4}]                     |ETL     |
+|3      |Ankit  |30     |HR       |Pune    |411001|[]                                         |Excel   |
+|3      |Ankit  |30     |HR       |Pune    |411001|[]                                         |PowerBI |
++-------+-------+-------+---------+--------+------+--------------------------------------------+--------+
+#reading singleline json
+df = spark.read.format("json").load("/data/input/data.json")
+df.printSchema()
+
+
+#multiline json:
+[
+  {
+    "id": 1,
+    "name": "Tushar",
+    "city": "Mumbai"
+  },
+  {
+    "id": 2,
+    "name": "Ankit",
+    "city": "Delhi"
+  },
+  {
+    "id": 3,
+    "name": "Ravi",
+    "city": "Pune"
+  }
+]
+
+#reading multiline json
+[
+  {
+    "emp_id": 1,
+    "name": "Tushar",
+    "dept": {
+      "id": 10,
+      "name": "IT"
+    },
+    "skills": ["PySpark", "SQL", "Azure"],
+    "projects": [
+      {
+        "name": "DataLakeMigration",
+        "duration": 6
+      },
+      {
+        "name": "ADFOptimization",
+        "duration": 3
+      }
+    ],
+    "address": {
+      "city": "Mumbai",
+      "zip": 400022
+    }
+  },
+  {
+    "emp_id": 2,
+    "name": "Ravi",
+    "dept": {
+      "id": 20,
+      "name": "Finance"
+    },
+    "skills": ["Python", "ETL"],
+    "projects": [
+      {
+        "name": "ReportingSystem",
+        "duration": 4
+      }
+    ],
+    "address": {
+      "city": "Delhi",
+      "zip": 110011
+    }
+  }
+]
+
+df = spark.read.format("json").option("multiline",True).load("/data/input/data.json")
+df.printSchema()
+root
+ |-- address: struct (nullable = true)
+ |    |-- city: string (nullable = true)
+ |    |-- zip: long (nullable = true)
+ |-- dept: struct (nullable = true)
+ |    |-- id: long (nullable = true)
+ |    |-- name: string (nullable = true)
+ |-- emp_id: long (nullable = true)
+ |-- name: string (nullable = true)
+ |-- projects: array (nullable = true)
+ |    |-- element: struct (containsNull = true)
+ |    |    |-- name: string (nullable = true)
+ |    |    |-- duration: long (nullable = true)
+ |-- skills: array (nullable = true)
+ |    |-- element: string (containsNull = true)
+
+df.show()
++----------------------+-------------------+-------+-------+----------------------------------------------------+-------------------------+
+|address               |dept               |emp_id |name   |projects                                            |skills                   |
++----------------------+-------------------+-------+-------+----------------------------------------------------+-------------------------+
+|{Mumbai, 400022}      |{10, IT}           |1      |Tushar |[{DataLakeMigration, 6}, {ADFOptimization, 3}]     |[PySpark, SQL, Azure]    |
+|{Delhi, 110011}       |{20, Finance}      |2      |Ravi   |[{ReportingSystem, 4}]                             |[Python, ETL]            |
++----------------------+-------------------+-------+-------+----------------------------------------------------+-------------------------+
+
+#so here spark automatically identifies json metadata and bifercate the data into columns
+#but what if we want all of the data in single column and don't want to expand data
+#reading the entire JSON record as a single column (a raw string)
+{"order_id": "O101", "customer_id": "C001", "order_line_items": [{"item_id": "I001", "qty": 6, "amount": 102.45}, {"item_id": "I002", "qty": 2, "amount": 2.01}], "contact": [9000010000, 9000010001]}
+
+df = spark.read.format("text").load("data/input/data.json")
+df.printSchema()
+root
+ |-- value: string (nullable = true)
+
+#stored all the json data in a single column
+df.show(truncate=False)
++-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+|value                                                                                                                                                                                                |
++-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+|{"order_id":"O101","customer_id":"C001","order_line_items":[{"item_id":"I001","qty":6,"amount":102.45},{"item_id":"I002","qty":2,"amount":2.01}],"contact":[9000010000,9000010001]}|
++-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+
+#reading json file with schema:
+#means what if we want to read only specific columns out of all the columns of a json file
+_schema = "customer_id string, order_id string, contact array<long>"
+df = spark.read.format("json").schema(_schema).load("data/input/data.json")
+df.show()
++-----------+--------+--------------------+
+|customer_id|order_id|             contact|
++-----------+--------+--------------------+
+|       C001|    O101|[9000010000, 9000...|
++-----------+--------+--------------------+
+
+#writing json file with schema:
+root
+ |-- contact: array (nullable = true)
+ |    |-- element: long (containsNull = true)
+ |-- customer_id: string (nullable = true)
+ |-- order_id: string (nullable = true)
+ |-- order_line_items: array (nullable = true)
+ |    |-- element: struct (containsNull = true)
+ |    |    |-- amount: double (nullable = true)
+ |    |    |-- item_id: string (nullable = true)
+ |    |    |-- qty: long (nullable = true)
+_schema = "contact array<long>, customer_id string, order_id string, order_line_items array<struct<amount double, item_id string, qty long>>"
+#changing above array long to array string as shown below and run it
+_schema = "contact array<string>, customer_id string, order_id string, order_line_items array<struct<amount double, item_id string, qty long>>"
+
+df_schema_new = spark.read.format("json").schema(_schema).load("data.json")
+df_schema_new.printSchema()
+root
+ |-- contact: array (nullable = true)
+ |    |-- element: string (containsNull = true)
+ |-- customer_id: string (nullable = true)
+ |-- order_id: string (nullable = true)
+ |-- order_line_items: array (nullable = true)
+ |    |-- element: struct (containsNull = true)
+ |    |    |-- amount: double (nullable = true)
+ |    |    |-- item_id: string (nullable = true)
+ |    |    |-- qty: long (nullable = true)
+
+df_schema_new.show()
++--------------------+-----------+--------+--------------------+
+|             contact|customer_id|order_id|    order_line_items|
++--------------------+-----------+--------+--------------------+
+|[9000010000, 9000...|       C001|    O101|[{102.45, I001, 6...|
++--------------------+-----------+--------+--------------------+
+#so we can see now contact column as string
+
+#from_json
 
 
 
