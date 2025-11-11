@@ -883,14 +883,348 @@ df_schema_new.show()
 +--------------------+-----------+--------+--------------------+
 #so we can see now contact column as string
 
-#from_json
+#from_json():
+#why from_json() is used?
+#--> from_json() converts a JSON string column into a structured column (StructType) using a provided schema, allowing Spark to extract and process individual JSON fields.			
+but when we read json file, spark automatically detects json data and its metadata and shows the data in different columns and converts it into a structured DataFrame then why from_json() ?
+-> when a json format data is stored inside a column then spark consider it as a string so to make it in structured format we use from_json() here.
+Eg,
+input data:
+{"name": "Tushar", "age": 27}
+{"name": "Ankit", "age": 30}
+
+df = spark.read.json("data.json")
+df.printSchema()
+root
+ |-- age: long (nullable = true)
+ |-- name: string (nullable = true)
+
+#Spark automatically reads JSON format, detects its structure, and splits it into columns (name, age).
+
+BUT, When your JSON is inside a column (as a string).
+Here’s where from_json() becomes useful and necessary.
+Spark doesn’t automatically parse strings that look like JSON — because they’re just text to Spark.
+input data:
+| id | json_col                      |
+| -- | ----------------------------- |
+| 1  | {"name": "Tushar", "age": 27} |
+| 2  | {"name": "Ankit", "age": 30}  |
+
+df.printSchema()
+root
+ |-- id: integer
+ |-- json_col: string
+#check above output, it has consider json_col datatype as string. so here is the actual usecase of from_json()
+from pyspark.sql.functions import from_json, col
+from pyspark.sql.types import StructType, StructField, StringType, IntegerType
+
+schema = StructType([							#NOTE:we need to define schema first since we are converting json string type to structured type using from_json()
+    StructField("name", StringType()),
+    StructField("age", IntegerType())
+])
+
+df_parsed = df.withColumn("parsed_json", from_json(col("json_col"), schema))
+df_parsed.show()
+#output:	#here parsed_json is the structured type data which spark can use.
++---+------------------------------+---------------+
+|id |json_col                      |parsed_json    |
++---+------------------------------+---------------+
+|1  |{"name": "Tushar", "age": 27} |{Tushar, 27}   |
+|2  |{"name": "Ankit", "age": 30}  |{Ankit, 30}    |
++---+------------------------------+---------------+
+
+df_parsed.printSchema()
+root
+ |-- id: long (nullable = true)
+ |-- json_col: string (nullable = true)
+ |-- parsed_json: struct (nullable = true)
+ |    |-- name: string (nullable = true)
+ |    |-- age: integer (nullable = true)
+
+#we can now access fields directly.
+df_parsed.select("id", "parsed_json.name", "parsed_json.age").show()				# After from_json() using, you can directly access JSON fields using dot notation.
+#output:
++---+-------+---+
+|id |name   |age|
++---+-------+---+
+|1  |Tushar |27 |
+|2  |Ankit  |30 |
++---+-------+---+
+
+#json_col → plain JSON text (string)
+#from_json() → converts it to a structured struct column (parsed_json)
+
+#In short, 
+from_json() converts a JSON string into real, usable structured data inside Spark.
+🔹 It’s needed when your JSON data is stored as text inside a column or file.
+🔹 After using it, you can directly access JSON fields using dot notation.
+
+#using nested json:
+#input data:
+data = [
+    (1, '{"emp_id": 101, "details": {"name": "Tushar", "dept": "Finance"}}'),
+    (2, '{"emp_id": 102, "details": {"name": "Ankit", "dept": "IT"}}')
+]
+
+df = spark.createDataFrame(data, ["id", "json_col"])
+df.show(truncate=False)
+#output:
++---+--------------------------------------------------------------+
+|id |json_col                                                      |
++---+--------------------------------------------------------------+
+|1  |{"emp_id": 101, "details": {"name": "Tushar", "dept": "Finance"}}|
+|2  |{"emp_id": 102, "details": {"name": "Ankit", "dept": "IT"}}      |
++---+--------------------------------------------------------------+
+#So right now, json_col is just a string column — Spark cannot access the nested "name" or "dept" directly.
+
+#define schema:
+from pyspark.sql.types import StructType, StructField, StringType, IntegerType
+
+schema = StructType([
+    StructField("emp_id", IntegerType()),
+    StructField("details", StructType([
+        StructField("name", StringType()),
+        StructField("dept", StringType())
+    ]))
+])
+
+from pyspark.sql.functions import from_json, col
+
+df_parsed = df.withColumn("parsed_json", from_json(col("json_col"), schema))
+df_parsed.show(truncate=False)
+#output:
++---+--------------------------------------------------------------+-----------------------------+
+|id |json_col                                                      |parsed_json                  |
++---+--------------------------------------------------------------+-----------------------------+
+|1  |{"emp_id": 101, "details": {"name": "Tushar", "dept": "Finance"}}|{101, {Tushar, Finance}}    |
+|2  |{"emp_id": 102, "details": {"name": "Ankit", "dept": "IT"}}      |{102, {Ankit, IT}}          |
++---+--------------------------------------------------------------+-----------------------------+
+df_parsed.printSchema()
+root
+ |-- id: long (nullable = true)
+ |-- json_col: string (nullable = true)
+ |-- parsed_json: struct (nullable = true)
+ |    |-- emp_id: integer (nullable = true)
+ |    |-- details: struct (nullable = true)
+ |    |    |-- name: string (nullable = true)
+ |    |    |-- dept: string (nullable = true)
+
+#So now, Spark understands the nested structure.
+#You can access nested fields using dot notation:
+df_parsed.select(
+    col("parsed_json.emp_id").alias("emp_id"),
+    col("parsed_json.details.name").alias("emp_name"),
+    col("parsed_json.details.dept").alias("dept")
+).show()
+#output:
++------+-------+--------+
+|emp_id|emp_name|dept   |
++------+-------+--------+
+|101   |Tushar |Finance |
+|102   |Ankit  |IT      |
++------+-------+--------+
+
+#example:
+#for json array in a string column
+#input data:
+data = [
+    (1, '[{"id": 101, "name": "Tushar", "dept": "Finance"}, {"id": 102, "name": "Ankit", "dept": "IT"}]'),
+    (2, '[{"id": 103, "name": "Ravi", "dept": "HR"}]')
+]
+
+df = spark.createDataFrame(data, ["batch_id", "json_array"])
+df.show(truncate=False)
+#output:
++--------+---------------------------------------------------------------------+
+|batch_id|json_array                                                           |
++--------+---------------------------------------------------------------------+
+|1       |[{"id":101,"name":"Tushar","dept":"Finance"},{"id":102,"name":"Ankit","dept":"IT"}]|
+|2       |[{"id":103,"name":"Ravi","dept":"HR"}]                              |
++--------+---------------------------------------------------------------------+
+
+#Right now, json_array is just a string column containing a JSON array.
+Since each JSON object inside the array looks like:
+{"id": 101, "name": "Tushar", "dept": "Finance"}
+We’ll define the schema for one element of the array:
+from pyspark.sql.types import StructType, StructField, StringType, IntegerType, ArrayType
+
+employee_schema = ArrayType(
+    StructType([
+        StructField("id", IntegerType()),
+        StructField("name", StringType()),
+        StructField("dept", StringType())
+    ])
+)
+
+from pyspark.sql.functions import from_json, col
+
+df_parsed = df.withColumn("parsed_json", from_json(col("json_array"), employee_schema))
+df_parsed.show(truncate=False)
+
+#output:
++--------+---------------------------------------------------------------------+----------------------------------------------+
+|batch_id|json_array                                                           |parsed_json                                   |
++--------+---------------------------------------------------------------------+----------------------------------------------+
+|1       |[{"id":101,"name":"Tushar","dept":"Finance"},{"id":102,"name":"Ankit","dept":"IT"}]|[{101, Tushar, Finance}, {102, Ankit, IT}]|
+|2       |[{"id":103,"name":"Ravi","dept":"HR"}]                              |[{103, Ravi, HR}]                            |
++--------+---------------------------------------------------------------------+----------------------------------------------+
+
+#Now Spark has parsed your JSON string into a real array of structs (ArrayType(StructType(...))).
+df_parsed.printSchema()
+root
+ |-- batch_id: long (nullable = true)
+ |-- json_array: string (nullable = true)
+ |-- parsed_json: array (nullable = true)
+ |    |-- element: struct (containsNull = true)
+ |    |    |-- id: integer (nullable = true)
+ |    |    |-- name: string (nullable = true)
+ |    |    |-- dept: string (nullable = true)
+
+#Explode the array to flatten data: If you want to expand (flatten) the array into multiple rows:
+from pyspark.sql.functions import explode
+
+df_exploded = df_parsed.select(
+    "batch_id",
+    explode(col("parsed_json")).alias("emp")
+)
+
+df_exploded.show(truncate=False)
+
++--------+--------------------------+
+|batch_id|emp                       |
++--------+--------------------------+
+|1       |{101, Tushar, Finance}    |
+|1       |{102, Ankit, IT}          |
+|2       |{103, Ravi, HR}           |
++--------+--------------------------+
+
+#Access fields inside each object
+df_exploded.select(
+    "batch_id",
+    col("emp.id").alias("emp_id"),
+    col("emp.name").alias("emp_name"),
+    col("emp.dept").alias("dept")
+).show()
+
+#output:
++--------+-------+--------+--------+
+|batch_id|emp_id |emp_name|dept    |
++--------+-------+--------+--------+
+|1       |101    |Tushar |Finance |
+|1       |102    |Ankit  |IT      |
+|2       |103    |Ravi   |HR      |
++--------+-------+--------+--------+
+
+#to_json():
+#-> to_json() is used to convert structured json data to string json data which is reverse of from_json().
+#example:
+from pyspark.sql.functions import to_json, struct, col
+
+data = [(101, "Tushar", "Finance"), (102, "Ankit", "IT")]
+df = spark.createDataFrame(data, ["emp_id", "name", "dept"])
+df.show()
+
+#output:
++------+-------+--------+
+|emp_id|name   |dept    |
++------+-------+--------+
+|   101|Tushar |Finance |
+|   102|Ankit  |IT      |
++------+-------+--------+
+
+#Now, let’s convert multiple columns into a single JSON column.
+df_json = df.withColumn("json_col", to_json(struct("emp_id", "name", "dept")))
+df_json.show(truncate=False)
+
+#output:
++------+-------+--------+----------------------------------+
+|emp_id|name   |dept    |json_col                          |
++------+-------+--------+----------------------------------+
+|   101|Tushar |Finance |{"emp_id":101,"name":"Tushar","dept":"Finance"}|
+|   102|Ankit  |IT      |{"emp_id":102,"name":"Ankit","dept":"IT"}      |
++------+-------+--------+----------------------------------+
+
+#usecase:
+Send structured data as a JSON string (e.g., to Kafka, APIs, or downstream systems).
+Store JSON inside a single column instead of multiple columns.
+Serialize nested structures easily.
+
+#nested structure example:
+df_nested = df.withColumn(
+    "json_col",
+    to_json(struct(
+        col("emp_id"),
+        struct(col("name"), col("dept")).alias("details")
+    ))
+)
+df_nested.show(truncate=False)
+
+#output:
++------+-------+--------+---------------------------------------------+
+|emp_id|name   |dept    |json_col                                     |
++------+-------+--------+---------------------------------------------+
+|101   |Tushar |Finance |{"emp_id":101,"details":{"name":"Tushar","dept":"Finance"}}|
+|102   |Ankit  |IT      |{"emp_id":102,"details":{"name":"Ankit","dept":"IT"}}      |
++------+-------+--------+---------------------------------------------+
 
 
+#explode:
+#-> explode() is a Spark SQL function used to convert an array column into multiple rows
+#It’s used when you have nested data like arrays or maps inside a DataFrame column and you want to flatten it.
+from pyspark.sql.functions import explode
+data = [
+    (1, ["apple", "banana", "mango"]),
+    (2, ["grape", "orange"]),
+    (3, [])
+]
+df = spark.createDataFrame(data, ["id", "fruits"])
+df.show(truncate=False)
 
+#output:
++---+----------------------+
+|id |fruits                |
++---+----------------------+
+|1  |[apple, banana, mango]|
+|2  |[grape, orange]       |
+|3  |[]                    |
++---+----------------------+
 
+from pyspark.sql.functions import explode
 
+df_exploded = df.select("id", explode("fruits").alias("fruit"))
+df_exploded.show()
 
+#output:
++---+------+
+| id| fruit|
++---+------+
+|  1| apple|
+|  1|banana|
+|  1| mango|
+|  2| grape|
+|  2|orange|
++---+------+
+#The array is split into multiple rows.
+#Row 3 with an empty array is removed (no output rows for empty arrays).
 
+#What if you want to keep empty arrays as nulls?
+#Use explode_outer() instead:
+from pyspark.sql.functions import explode_outer
+
+df_outer = df.select("id", explode_outer("fruits").alias("fruit"))
+df_outer.show()
+
+#output:
++---+------+
+| id| fruit|
++---+------+
+|  1| apple|
+|  1|banana|
+|  1| mango|
+|  2| grape|
+|  2|orange|
+|  3|  null|
++---+------+
 
 
 
