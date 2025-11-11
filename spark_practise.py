@@ -514,9 +514,9 @@ df.show()
 #spark's default mode in PERMMISSIVE.
 there are three types of modes:
 1. PERMISSIVE (default mode): it puts bad records into different column i.e. _corrupt_record.
-Eg.
+Eg. not mandatory to write .option("mode", "PERMISSIVE")
 _schema = "emp_id int, dept_id int, name string, salary double"
-df = spark.read.format("csv").option("header",True).schema(_schema).load("data1.csv")
+df = spark.read.format("csv").option("mode", "PERMISSIVE").option("header",True).schema(_schema).load("data1.csv")
 
 #if we run abve commands, it will not reject corrupt records , it will put Null inplace of it.
 #but how do we identify which column data has corrupt values?
@@ -530,8 +530,8 @@ emp_id,dept_id,name,salary
 4,David,70000
 5,103,Robert,65000
 
-_schema = "emp_id int, dept_id int, name string, salary double, _corrupt_record string"
-df = spark.read.format("csv").option("header",True).schema(_schema).load("data1.csv")
+_schema = "emp_id int, dept_id int, name string, salary double,		 _corrupt_record string"
+df = spark.read.format("csv").option("mode", "PERMISSIVE").option("header",True).schema(_schema).load("data1.csv")
 
 output data:
 +-------+--------+-------+------+----------------------+
@@ -540,15 +540,56 @@ output data:
 |1      |101     |Tushar |50000 |null                  |
 |2      |102     |Annam  |60000 |null                  |
 |3      |101     |John   |null  |null                  |
-|4      |null    |null   |null  |4,David,70000         |
+|4      |null    |null   |null  |4,David,70000         |	#corrupt data populated, full row gets populated in _corrupt_record column.
 |5      |103     |Robert |65000 |null                  |
 +-------+--------+-------+------+----------------------+
 
 from pyspark.sql.functions import col
-df.filter(col("_corrupt_record").isNotNull()).show()
+df.filter(col("_corrupt_record").isNotNull()).show()		#OR		df.where("_corrupt_record is not null").show()
+
+#NOTE: it is not mandatory to use _corrupt_record as a column name. we can give different name using columnNameOfCorruptRecord option.
+_schema = "emp_id int, dept_id int, name string, salary double,		 bad_record string"
+df = spark.read.format("csv").option("header",True).option("mode", "PERMISSIVE").option(columnNameOfCorruptRecord,"bad_record").schema(_schema).load("data1.csv")
++-------+--------+-------+------+----------------+
+|emp_id |dept_id |name   |salary|bad_record      |
++-------+--------+-------+------+----------------+
+|1      |101     |Tushar |50000 |null            |
+|2      |102     |Annam  |60000 |null            |
+|3      |101     |John   |null  |null            |
+|4      |null    |null   |null  |4,David,70000   |
+|5      |103     |Robert |65000 |null            |
++-------+--------+-------+------+----------------+
+
+
+#using StructType() and StructField() functions for schema defination:
+from pyspark.sql.types import StructType, StructField, IntegerType, StringType, DoubleType
+
+schema = StructType([
+    StructField("emp_id", IntegerType(), True),
+    StructField("dept_id", IntegerType(), True),
+    StructField("name", StringType(), True),
+    StructField("salary", DoubleType(), True)
+])
+
+df = (
+    spark.read
+    .option("header", "true")
+    .option("mode", "PERMISSIVE")
+    .option("columnNameOfCorruptRecord", "bad_record")
+    .schema(schema)
+    .csv("employees.csv")
+)
+
+#Spark will automatically add a bad_record column if any row doesn’t match the schema.
+StructField("_corrupt_record", StringType(), True)
+then Spark will not treat it as a special column anymore.
+It will just treat it like a normal string column —
+so malformed rows won’t go there automatically.
+
+So you’ll lose the automatic malformed record tracking behavior.
 
 2. DROPMALFORMED:
-3. FAILFAST
+3. FAILFAST:
 
 
 
