@@ -445,6 +445,11 @@ spark = (
 )
 spark
 #spark UI link will be appeared in output once we run above code.
+
+#inside Spark UI:
+Job link > Stage link > task link
+https://youtu.be/k2AVOmUS7i0?si=U8PAyr1JgI1m8bkX
+
 Tabs inside Spark UI:
 Jobs	 Stages     Storage		Environment		Executors	  SQL/Dataframe
 
@@ -480,11 +485,72 @@ df = spark.read.format("csv").option("header",True).schema("_schema").load("/dat
 
 df.show()
 
+#NOTE: inferSchema does not read all the records — it only reads a sample of rows from the dataset to infer the schema (column data types).
+
+#ways to define schema in spark:
+1. using inferSchema():
+df = spark.read.format("csv").option("header",True).schema("_schema").load("/data/input/emp.csv")
+#spark reads schema automatically, performance overhead.
+
+2. using StructType() and StructField():(Recommended)
+from pyspark.sql.types import StructType , StructField, IntegerType
+_schema = StructType([
+	StructField("emp_id", IntegerType(), True),
+	StructField("dept_id", IntegerType(), True"),
+	StructField("name", StringType(), True),
+	StructField("salary", DoubleType(), True)
+])
+
+df = spark.read.format("csv").option("header",True).schema(_schema).load("/data/input/data1.csv")
+
+3. using SQL like statement: (less flexibility as we can't define if any column can take default null values)
+_schema = "emp_id int, dept_id int, name string, salary double"
+df = spark.read.format("csv").option("header",True).schema(_schema).load("data1.csv")
+df.show()
+
+#Mode:
+#mode in spark is useful to handle bad records.
+#we need to apply schema in order to use mode, we cant do it using inferSchema.
+#spark's default mode in PERMMISSIVE.
+there are three types of modes:
+1. PERMISSIVE (default mode): it puts bad records into different column i.e. _corrupt_record.
+Eg.
+_schema = "emp_id int, dept_id int, name string, salary double"
+df = spark.read.format("csv").option("header",True).schema(_schema).load("data1.csv")
+
+#if we run abve commands, it will not reject corrupt records , it will put Null inplace of it.
+#but how do we identify which column data has corrupt values?
+#for that spark provides default column which we need to call while defining schema
+
+input data:
+emp_id,dept_id,name,salary
+1,101,Tushar,50000
+2,102,Annam,60000
+3,101,John,abc
+4,David,70000
+5,103,Robert,65000
+
+_schema = "emp_id int, dept_id int, name string, salary double, _corrupt_record string"
+df = spark.read.format("csv").option("header",True).schema(_schema).load("data1.csv")
+
+output data:
++-------+--------+-------+------+----------------------+
+|emp_id |dept_id |name   |salary|_corrupt_record       |
++-------+--------+-------+------+----------------------+
+|1      |101     |Tushar |50000 |null                  |
+|2      |102     |Annam  |60000 |null                  |
+|3      |101     |John   |null  |null                  |
+|4      |null    |null   |null  |4,David,70000         |
+|5      |103     |Robert |65000 |null                  |
++-------+--------+-------+------+----------------------+
+
+from pyspark.sql.functions import col
+df.filter(col("_corrupt_record").isNotNull()).show()
+
+2. DROPMALFORMED:
+3. FAILFAST
 
 
-#inside Spark UI:
-Job link > Stage link > task link
-https://youtu.be/k2AVOmUS7i0?si=U8PAyr1JgI1m8bkX
 
 
 
