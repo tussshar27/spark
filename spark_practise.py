@@ -942,7 +942,10 @@ root
  |    |-- age: integer (nullable = true)
 
 #we can now access fields directly.
-df_parsed.select("id", "parsed_json.name", "parsed_json.age").show()				# After from_json() using, you can directly access JSON fields using dot notation.
+df_parsed.select("id", "parsed_json.name", "parsed_json.age").show()	
+#OR 		
+df_parsed.select("id", "parsed_json.*").show()			#to show all the columns use *	
+# After from_json() using, you can directly access JSON fields using dot notation.
 #output:
 +---+-------+---+
 |id |name   |age|
@@ -1225,6 +1228,62 @@ df_outer.show()
 |  2|orange|
 |  3|  null|
 +---+------+
+
+#posexplode():
+#posexplode() is an extention to explode().
+#it also returns the position (index) (starting from 0) of each element in the array or map.
+
+from pyspark.sql.functions import posexplode
+
+data = [
+    (1, ["apple", "banana", "mango"]),
+    (2, ["grape", "orange"])
+]
+df = spark.createDataFrame(data, ["id", "fruits"])
+df.show(truncate=False)
+
+#output:
++---+----------------------+
+|id |fruits                |
++---+----------------------+
+|1  |[apple, banana, mango]|
+|2  |[grape, orange]       |
++---+----------------------+
+
+df_pos = df.select("id", posexplode("fruits").alias("pos", "fruit"))
+df_pos.show()
+
+#output:
++---+---+------+
+| id|pos| fruit|
++---+---+------+
+|  1|  0| apple|
+|  1|  1|banana|
+|  1|  2| mango|
+|  2|  0| grape|
+|  2|  1|orange|
++---+---+------+
+
+#What if we want to keep empty arrays?
+#Use posexplode_outer() instead.
+from pyspark.sql.functions import posexplode_outer
+
+data = [
+    (1, ["apple", "banana"]),
+    (2, [])
+]
+df = spark.createDataFrame(data, ["id", "fruits"])
+df_outer = df.select("id", posexplode_outer("fruits").alias("pos", "fruit"))
+df_outer.show()
+
+#output:
++---+----+------+
+| id| pos| fruit|
++---+----+------+
+|  1|   0| apple|
+|  1|   1|banana|
+|  2|null|  null|
++---+----+------+
 
 
 
