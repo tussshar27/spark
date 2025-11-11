@@ -589,7 +589,28 @@ so malformed rows won’t go there automatically.
 So you’ll lose the automatic malformed record tracking behavior.
 
 2. DROPMALFORMED:
+#it drops the bad records.
+_schema = "emp_id int, dept_id int, name string, salary double"
+df = spark.read.format("csv").option("mode","DROPMALFORMED").option("header", True).schema("_schema").load("data.csv")
+df.show()
+#IT WILL REMOVE ALL THE CORRUPT RECORD ROWS AND SHOW ONLY THE VALID RECORD ROWS.
+
+
 3. FAILFAST:
+#it fails when there is any bad records.
+_schema = "emp_id int, dept_id int, name string, salary double"
+df = spark.read.format("csv").option("mode","FAILFAST").option("header", True).schema("_schema").load("data.csv")
+df.show()
+
+#BONUS TIP:
+#we are writing .option() multiple times but there is one alternative to it using dictionary.
+_options = {
+	"header":"true",
+	"inferschema":"true",
+	"mode":"PERMISSIVE"
+}
+df = spark.read.format("csv").option(**_options).load("data.csv")
+df.show()
 
 
 
