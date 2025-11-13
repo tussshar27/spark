@@ -1285,18 +1285,271 @@ df_outer.show()
 |  2|null|  null|
 +---+----+------+
 
+#to check how many cores we have to run task parallely
+spark.sparkContext.defaultParallelism
+#output
+8
+#to check from spark UI:
+#-> go to spark UI > Executors tab > we can find number of executors available and its cores. 
+
+#to check number of partitions
+df.rdd.getNumPartitions()
+#output
+8
+
+#to write the data in spark
+df.write.format("parquet").save("/output/data/file.parquet")
+df.write.format("csv").option("header",True).save("/output/data2/file2.csv")
+
+#since writing is an action, so in spark UI > Jobs tab, we can see a job starts with name "save at ..."
+#the number of partitions are equal to the number of parquet/csv files which gets created after running the job. so since there are 8 partitions so it will create 8 partitioned parquet/csv files.
+#and the data will get divided within these 8 partitions.
+
+#to check partition information
+#each row will show its partition id in which it was used. since we have 8 partitions so the rows are assigned partitions between 0 to 7.
+from pyspark.sql.functions import spark_partition_id
+df.withColumn("partition_id",spark_partition_id()).show()
+
+#partitionBy():
+#partitionBy controls how data is physically written into folders/partitions when you save a DataFrame to storage (like Parquet, ORC, CSV).
+#It is used ONLY with write, not with read or transformations.
+#Partitioning helps when:
+#You have large datasets
+#You frequently filter by certain columns
+#You want faster reads
+#You want organized folders (e.g., by date, country, year)
+
+df.write.format("csv").partitionBy("dept_id").option("header",True).save("data/output/file1")
+#here it will create output files based on dept_id column value
+
+#example:
+df.write.format("parquet").partitionBy("col1", "col2").save("data/output/file2")
+path/
+ ├── col1=value1/  
+ │     ├── col2=value1/part-xxxxx.snappy.parquet  
+ │     └── col2=value2/part-yyyyy.snappy.parquet  
+ ├── col1=value2/  
+       └── col2=value3/part-zzzzz.snappy.parquet  
+
+#example2:
+df.write \
+  .partitionBy("category", "year") \
+  .parquet("/mnt/data/sales")
+
+/mnt/data/sales/
+ ├── category=A/year=2024/part.parquet
+ ├── category=A/year=2025/part.parquet
+ ├── category=B/year=2024/part.parquet
+ └── category=B/year=2025/part.parquet
+
+Benefits of partitionBy
+✔️ Faster reading:
+When you filter on partitioned columns, Spark reads only those folders, not entire dataset.
+df = spark.read.parquet("/mnt/data/sales")
+df_filtered = df.filter("category = 'A'")
+#Spark will read only folder:
+#output:
+category=A/
+
+✔️ Good performance for time-series data
+Partitioning by date columns is very common:
+year
+month
+day
+
+2️⃣ Avoid over-partitioning
+
+If you partition on too many columns, Spark will create:
+
+thousands of folders
+
+each with tiny files
+➡️ BAD for performance
+
+Example of over-partitioning:
+df.write.partitionBy("country", "state", "city", "pin_code")
+
+#real scenario
+You have 20 records
+dept_id values range from 1 to 40
+Only 20 dept_ids exist out of 40 possible values
+(Some dept_ids between 1–40 DO NOT appear in your data)
+
+df.write.partitionBy("dept_id").parquet("/mnt/data/output")
+
+Spark will create only folders for dept_ids present in the DataFrame
+Not all 1 to 40.
+Important: Spark does NOT create empty folders
+If data contains only these dept_ids:
+[1, 3, 5, 8, 10, 11, 15, 20, 30, 33, 40]   (for example)
+#output:
+output/
+ ├── dept_id=1/
+ ├── dept_id=3/
+ ├── dept_id=5/
+ ├── dept_id=8/
+ ├── dept_id=10/
+ ├── dept_id=11/
+ ├── dept_id=15/
+ ├── dept_id=20/
+ ├── dept_id=30/
+ ├── dept_id=33/
+ └── dept_id=40/
+
+Even though dept_id range is 1–40, only actual values in the DataFrame create folders.'
+Inside each folde, Only rows belonging to that dept_id are saved:
+dept_id = 3 folder
+output/dept_id=3/
+   part-0000.parquet
+Contains only rows where dept_id = 3.
+
+so your input data:
+| dept_id | count  |
+| ------- | ------ |
+| 5       | 4 rows |
+| 10      | 2 rows |
+| 15      | 6 rows |
+| 22      | 3 rows |
+| 39      | 5 rows |
+
+output:
+output/
+ ├── dept_id=5/   (4 rows)
+ ├── dept_id=10/  (2 rows)
+ ├── dept_id=15/  (6 rows)
+ ├── dept_id=22/  (3 rows)
+ └── dept_id=39/  (5 rows)
+
+No folder for:
+dept_id = 1
+dept_id = 2
+dept_id = 3
+…
+dept_id = 40
+Unless those appear in the DataFrame.
+
+SO, 
+#NOTE: partitionBy creates folders only for values that exist in the DataFrame.
+#It does NOT create folders for the full range of possible values.
 
 
+#What is Partition Pruning?
+Spark reads only the folders (partitions) that match your filter condition,
+instead of scanning the entire dataset.
+This makes queries much faster and reduces I/O cost drastically.
 
+#example:
+Let’s say your output structure after partitionBy("dept_id") is:
+/data/employees/
+ ├── dept_id=5/
+ ├── dept_id=10/
+ ├── dept_id=15/
+ ├── dept_id=22/
+ └── dept_id=39/
 
+These folders were created because only these dept_ids existed in the DataFrame.
+Now you read the data
+df = spark.read.parquet("/data/employees")
 
+Case 1: Filter on the Partition Column (GOOD)
+result = df.filter("dept_id = 15")
+result.show()
 
+Spark will read ONLY this folder:
+dept_id=15/
 
+Because Spark knows:
+partition column = dept_id
+filter = dept_id = 15
+So only the folder dept_id=15 needs to be read.
+This becomes extremely fast.
 
+Case 2: Filter on multiple partition columns
+If you partition like:
+df.write.partitionBy("year", "month")
 
+year=2024/month=1/
+year=2024/month=2/
+year=2025/month=1/
 
+df.filter("year = 2024 AND month = 1")
 
+Reads ONLY:
+year=2024/month=1/
 
+If you filter on a non-partition column:
+df.filter("salary > 50000")
+❌ Spark cannot prune partitions
+So it must read ALL folders:
+dept_id=5/
+dept_id=10/
+dept_id=15/
+dept_id=22/
+dept_id=39/
+Then apply the filter after reading.
+
+df.filter("dept_id IN (10, 22)")
+✔️ Spark reads ONLY:
+
+dept_id=10/
+dept_id=22/
+
+df.filter("upper(dept_id) = '10'")
+❌ No pruning if we apply any function on partitioned column
+Spark must read all partitions in above case.
+
+df.filter(col("dept_id") == 10)
+✔️ Partition will be pruned if col is used.
+
+DataFrame API vs SQL
+Both support pruning:
+df.where(col("dept_id") == 39)
+AND
+spark.sql("SELECT * FROM emp WHERE dept_id = 39")
+✔️ Both API and SQL prune partitions.
+
+If each partition folder has large files:
+Reading all partitions may take minutes
+Reading only 1 folder may take seconds
+This is why partition columns should match the columns you filter MOST OFTEN.
+
+| Action                               | Partition Pruned?                      |
+| ------------------------------------ | -------------------------------------- |
+| `dept_id = 10`                       | ✔️ Yes                                 |
+| `dept_id IN (10,20)`                 | ✔️ Yes                                 |
+| `dept_id BETWEEN 10 AND 20`          | ✔️ Yes                                 |
+| `upper(dept_id) = '10'`              | ❌ No                                   |
+| `salary > 25000`                     | ❌ No                                   |
+| Filter on non-partition column       | ❌ No                                   |
+| Filter on multiple partition columns | ✔️ Yes                                 |
+| Filter using column expression       | ✔️ Only if Spark can infer exact value |
+
+🔥 Recommended Partitioning Strategy:
+| Data Type        | Best Partition Column |
+| ---------------- | --------------------- |
+| Transaction data | year, month, day      |
+| Events / logs    | date, hour            |
+| Customer data    | region, country       |
+| Finance data     | fiscal_year           |
+| Employee data    | dept_id               |
+| Time series      | year/month            |
+ 	
+
+#write mode:
+1. append : append new data to existing data
+2. overwrite : overwrite new data with existing data
+3. ignore : ignore the new data if the same data already exists
+4. errorifexists : You want the pipeline to fail if data/output folder already exists, Prevent accidental overwrite/append
+
+df.write.mode("append").option("header",True).parquet("path")
+df.write.mode("overwrite").option("header",True).parquet("path")
+df.write.mode("ignore").option("header",True).parquet("path")
+df.write.mode("errorifexists").option("header",True).parquet("path")
+
+#what if we need to write only 1 partition file to share it with downstream?
+df.write.format("csv").repartition(1).mode("overwrite").option("header",True).save("data/file1")
+
+#if you want to rename a filename then you have to rename it manually, because spark does not rename the filename, it only creates a folder for files.
 
 df.explain(extended=True)
 
