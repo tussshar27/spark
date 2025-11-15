@@ -1546,10 +1546,130 @@ df.write.mode("overwrite").option("header",True).parquet("path")
 df.write.mode("ignore").option("header",True).parquet("path")
 df.write.mode("errorifexists").option("header",True).parquet("path")
 
-#what if we need to write only 1 partition file to share it with downstream?
+#what if we want to write only 1 partition file to share it with downstream?
 df.write.format("csv").repartition(1).mode("overwrite").option("header",True).save("data/file1")
 
-#if you want to rename a filename then you have to rename it manually, because spark does not rename the filename, it only creates a folder for files.
+#NOTE: the number of partitions  = the number of output files
+#.repartition(5) -> 5 partitions -> 5 output files.
+
+#how spark works under cluster environment?
+driver node -> resource manager -> cluster (worker node1 + worker node2)
+
+How spark works internally?:
+In Client mode: the driver seats in client machine
+In CLuster mode: the driver prrogram seats in one of the executors inside the worker node. the resource manager will create one more executor for the driver program.
+1. when we submit our spark program, spark session from the driver program connects with the resource manager and ask for the required resources
+2. eg, you asked for 4 executors with 2 CPU cores each equals to 8 CPU cores.
+3. now the resource manager will connect with the cluster and it will create the required executors.
+4. as per our calculation, for each worker node, it created two executors. and for each executor it will create two CPU cores.
+5. once the resource is allocated in each worker node, resource manager will get back to driver program with the required information.
+6. once the information is supplied to the driver program, then the driver program starts connecting with the executors to execute the code.
+7. then first it will copy our python program or our application code from the driver node to all the allotted executors.
+8. once the python program is available in all the executors then the spark session will instruct the tasks to perform.
+9. now all the CPU cores will have their tasks that they need to perform in order to process the data.
+10. and once the processing is done, executors will report back to the driver program with the required result.
+11. based on the result status whether it succeeded or failed. driver program will now communicate again with resource manager to shutdown the allocated resource.
+12. once the resource manager gets all the information, it will scrap off all the executors it has created for that application.
+
+Resource manager/ cluster manager -> responsible for allocating resource to the driver program.
+there are four types of cluster manager:
+1. standalone: spark cluster
+2. YARN: hadoop cluster
+3. Mesos: no longer available
+4. Kubernetes: for containerize environment
+
+Spark Master UI: http://localhost:8080
+Spark Worker UI: http://localhost:8081
+Spark App UI:    http://localhost:4040
+
+cluster type:
+| Mode                   | Description                                                                                                |
+| ---------------------- | ---------------------------------------------------------------------------------------------------------- |
+| **local[*]**           | Run Spark **locally using all CPU cores**. No cluster. Good for testing.                                   |
+| **Standalone Cluster** | Run Spark on **multiple machines** with distributed workers and executors. Good for large-scale workloads. |
+
+mode type:
+a. Client Mode:
+Driver runs on your local machine (where you submit the job)
+Executors run on cluster nodes
+If your laptop dies → job fails
+
+b. Cluster Mode:
+Driver runs inside the cluster
+Spark master or worker launches it
+Your laptop can disconnect, job still runs
+
+#NOTE: local is NOT client mode. both are completely different concepts
+putting it all together:
+| Cluster Manager | Deploy Mode      | Meaning                               |
+| --------------- | ---------------- | ------------------------------------- |
+| **local**       | *No deploy mode* | Spark runs fully on your machine      |
+| **standalone**  | client           | Driver = laptop, Executors = cluster  |
+| **standalone**  | cluster          | Driver = cluster, Executors = cluster |
+
+local means Spark runs locally
+standalone means Spark runs on a real cluster
+client/cluster mode simply decide where driver runs.
+
+✅ How JVMs Are Used in Spark?
+Spark is written in Scala, which runs on the JVM.
+So every Spark component (driver, executors) runs inside separate JVM instances.
+Executors NEVER share JVMs.
+
+Driver and executors each run in its own separate JVM.
+Submit Machine / Client
++------------------------+
+|   DRIVER JVM           |
++-----------+------------+
+            |
+            v
+----------------------------------------------
+ Worker Node 1          Worker Node 2
++------------------+   +------------------+
+| EXECUTOR JVM 1   |   | EXECUTOR JVM 2   |
+| Threads (tasks)  |   | Threads (tasks)  |
++------------------+   +------------------+
+----------------------------------------------
+🧩 How JVM relates to parallelism
+Each executor JVM:
+Has multiple threads
+Each thread runs one Spark task
+Threads = cores assigned to executor
+
+how you configure?
+--executor-cores 4  
+--executor-memory 8G
+
+Meaning:
+Executor JVM has 4 task threads
+It can run 4 tasks at a time
+It has 8 GB heap memory
+
+🛠️ Why Spark uses multiple JVMs (and not one)?
+✔ Fault isolation: If one executor JVM crashes, only tasks on that executor fail—not entire program.
+
+What exactly is a CPU core in Spark?
+In Spark, a CPU core = ONE parallel task slot.
+That means:
+1 CPU core = Spark can run 1 task at a time
+
+🧠 Why does Spark need CPU cores?
+
+Spark runs work in parallel.
+Parallelism only increases when you have more CPU cores.
+1 core → 1 task at a time
+4 cores → 4 tasks at a time
+16 cores → 16 tasks at a time
+More cores = more speed
+
+
+
+
+
+
+
+
+
 
 df.explain(extended=True)
 
