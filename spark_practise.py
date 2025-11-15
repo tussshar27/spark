@@ -1663,6 +1663,86 @@ Parallelism only increases when you have more CPU cores.
 More cores = more speed
 
 
+🖥 Example 1 — Simple parallelism
+
+Imagine your DataFrame has 8 partitions.
+
+Case A: Executor has 1 core
+Executor:
+ Cores = 1
+
+Tasks:
+ [T1] -> [T2] -> [T3] -> ... -> [T8]   (serial)
+
+
+Runs 8 tasks one by one.
+Very slow.
+
+
+Case B: Executor has 4 cores
+Executor:
+ Cores = 4
+
+Tasks:
+ T1 T2 T3 T4   (runs together)
+ T5 T6 T7 T8   (next batch)
+
+
+Runs 4 tasks at a time.
+Twice as fast (for 8 tasks).
+
+Case C: Executor has 8 cores
+Executor:
+ Cores = 8
+
+Tasks:
+ T1 T2 T3 T4 T5 T6 T7 T8   (runs all together)
+Runs all tasks in parallel → fastest.
+
+		  
+🔥 CPU Cores control Spark’s parallel processing
+👉 Example:
+--executor-cores 4
+
+This means:
+Executor can run 4 tasks simultaneously
+Executor JVM will have 4 task threads
+
+how dataframe partitions are different than cluster partitions?
+DataFrame partitions = how your data is split
+A Spark DataFrame is divided into multiple partitions, and each partition is processed by one task.
+100 MB DataFrame → 10 partitions → each ~10 MB
+df.rdd.getNumPartitions()
+
+Cluster partitions (resources) = how your cluster is split (nodes, executors, cores, memory)
+These refer to how your cluster resources are divided, not your data.
+
+🔢 How to calculate number of partitions by size for our data?--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+Step 1: Get file size (example: 1 GB = 1024 MB)
+Step 2: Divide by ideal partition size
+
+Example:
+
+1024 MB / 128 MB = 8 partitions
+Step 3: Apply using repartition()
+df = df.repartition(8)
+Now each partition ≈ 128MB.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
