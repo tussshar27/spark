@@ -23,8 +23,8 @@ spark.sparkContext.defaultParallelism
 8
 
 #creating two dataframes with range from 2/4 till 200 by doing stepup of 2 and 4. so both the dataframe will contain even numbers
-df1 = spark.range(4,200,2)
-df2 = spark.range(2,200,4)
+df1 = spark.range(4,200,2)            #1 stage -> 8 partitions/tasks
+df2 = spark.range(2,200,4)            #1 stage -> 8 partitions/tasks
 
 #to check how many partitions our dataframe has.
 df1.rdd.getNumPartitions()
@@ -35,8 +35,8 @@ df2.rdd.getNumPartitions()
 8
 
 #performing repartition on dataframes
-df3 = df1.repartition(5)
-df4 = df2.repartition(7)
+df3 = df1.repartition(5)              #1 stage -> 8 partitions converted to 5 partitions/tasks      #spark doing shuffle and converting above 8 tasks into 5 tasks    
+df4 = df2.repartition(7)              #1 stage -> 8 partitions converted to 7 partitions/tasks      #spark doing shuffle and converting above 8 tasks into 7 tasks
 
 df3.rdd.getNumPartitions()
 #output 
@@ -44,10 +44,48 @@ df3.rdd.getNumPartitions()
 df4.rdd.getNumPartitions()
 #output 
 7
-#so the after doing repartition, there are 5/7 partitions instead of default 8.
+#so after doing repartition, there are 5/7 partitions instead of default 8.
 
+df = df3.join(df4, how="inner", on="id")      #1 stage ->  5 and 7 partitions merge and got converted to 200 partitions/tasks
+                                              #by default the SHUFFLE partition value is 200. and it can be controlled from spark config.
+#performing join on both dataframes
 
+sum_df = df.selectExpr("sum(id) as sum_id")    #1 stage > read all the above 200 partitions and create 1 partition as we are displaying one sum value.
+#performing sum of id
 
+sum_df.show()
+#output
+sum_id
+2238
+
+#if we make total of all the stages and tasks above:
+#we have, 6 stages and 8+8+5+7+200+1 = 229 tasks
+
+also, after running above action, go to spark UI and we can see that:
+1 job is created > 6 stages created > 229 tasks created
+
+so this is how 229 tasks got created.
+shuffle divides the job into stages, it forms a wall between two stages.
+refer Shuffle Read and Shuffle Write columns from the DAG to understand data read and write.
+
+sum_df.explain()
+#it will show physical plan.
+#to read explain plan, go from bottom to top.
+
+#if we do union on top of above calculated dataframe, then spark skip the stages which were already calculated.
+df_f = sum_df.union(df4)
+df_f.show()
+
+#IMPORTANT
+#whenever there is shuffle/exchange, spark writes the data and in the next stage spark reads the data.
+#and here is the advantage, whenever there is any failure in the stage then it can read the data from the previous shuffle write and it does not require to trigger all the stages which eventually avoid to read and process the data again.
+
+#dataframe is an abstraction of rdd
+df.rdd
+#if we run above code then we can see the rdd detail in output.
+
+when to use rdd?
+it is only recommended to use when we have to distribute our data physically with the help of our code or we have to work extensively with spark APIs.
 
 
 
