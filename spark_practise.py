@@ -1555,20 +1555,34 @@ df.write.format("csv").repartition(1).mode("overwrite").option("header",True).sa
 #how spark works under cluster environment?
 driver node -> resource manager -> cluster (worker node1 + worker node2)
 
-How spark works internally?:
-In Client mode: the driver seats in client machine
-In CLuster mode: the driver prrogram seats in one of the executors inside the worker node. the resource manager will create one more executor for the driver program.
-1. when we submit our spark program, spark session from the driver program connects with the resource manager and ask for the required resources
+#IMPORTANT:
+HOW SPARK WORK INTERNALLY?:
+In Client mode: the driver runs in client machine/laptop.
+In CLuster mode: the driver program runs in one of the executors inside the worker node. the resource manager will create one special driver executor for the driver program.
+1. when we submit our spark program or run databricks notebook, the driver program starts and creates a sparkSession. Driver asks Cluster Manager for the required resources.
+#SparkSession = Entry point → communicates with Cluster Manager.
+Driver says:
+"I need X executors"
+"Each executor needs Y cores & Z memory"
 2. eg, you asked for 4 executors with 2 CPU cores each equals to 8 CPU cores.
-3. now the resource manager will connect with the cluster and it will create the required executors.
+3. now the resource manager will connect with the cluster and it will create the required executors inside the allocated worker nodes.
 4. as per our calculation, for each worker node, it created two executors. and for each executor it will create two CPU cores.
 5. once the resource is allocated in each worker node, resource manager will get back to driver program with the required information.
-6. once the information is supplied to the driver program, then the driver program starts connecting with the executors to execute the code.
-7. then first it will copy our python program or our application code from the driver node to all the allotted executors.
-8. once the python program is available in all the executors then the spark session will instruct the tasks to perform.
+6. once the information is supplied to the driver program, then the driver builds DAG (Directed Acyclic Graph) as Spark never executes transformations immediately.
+Every transformation (filter, select, map) builds a logical execution plan called DAG.
+Narrow dependencies & wide dependencies are identified.
+7. DAG is submitted to DAG Scheduler. Scheduler spilts DAG into stages based on shuffle boundaries.
+Before shuffle → Stage 1
+After shuffle → Stage 2
+After another shuffle → Stage 3
+… and so on.
+8. For each Stage, Spark creates Tasks. Each input partition = 1 task, Example: 200 partitions → 200 tasks
+	starts DIRECTLY connecting with the executors to execute the code.
+7. then driver node will send our python program or application code to all the allocated executors.
+8. once the python program is available in all the executors then the spark session will instruct the tasks to perform in each core.
 9. now all the CPU cores will have their tasks that they need to perform in order to process the data.
 10. and once the processing is done, executors will report back to the driver program with the required result.
-11. based on the result status whether it succeeded or failed. driver program will now communicate again with resource manager to shutdown the allocated resource.
+11. based on the result status whether it succeeded or failed. driver program will now communicate again with resource manager to shutdown the allocated resources.
 12. once the resource manager gets all the information, it will scrap off all the executors it has created for that application.
 
 Resource manager/ cluster manager -> responsible for allocating resource to the driver program.
@@ -1581,6 +1595,52 @@ there are four types of cluster manager:
 Spark Master UI: http://localhost:8080
 Spark Worker UI: http://localhost:8081
 Spark App UI:    http://localhost:4040
+
+Inside Spark UI > 2 worker nodes URL with stats like Cores and Memory for each.
+
+after running spark  with default settings:
+from pyspark.sql. imporrt SparkSession
+spark = (
+	SparkSession
+	.builder
+	.appName("cluster execution")
+	.master("local[*]")
+	.getOrCreate()
+)
+go to Executors Tab > we can see three executors: 0 , 1 , driver with each executor in each worker node having each 8 cores with 1028mb each executor memoryand in total 16 tasks.
+
+#lets make it to 4 executors total i.e. two execuotrs in each worker nodes and each executor carry 4 cores with 512mb size of each executor memory:
+from pyspark.sql implort SparkSession
+spark = (
+	SparkSession
+	.builder
+	.appName("standalone cluster")
+	.master("standalone://ID:PORT")
+	.config("spark.executor.instances",4)
+	.config("spark.executor.cores",4)
+	.config("spark.executor.memory","512M")
+	.getOrCreate()
+)
+
+#now from above code:
+go to Executors Tab > we can see four executors: 0 , 1 , 2 , 3 (and one driver executor which is running in local) having 4 cores each with 512mb each executor memory. 
+so all the 4 tasks are running in parallel.
+
+
+but the above spark configuration is not the best way. the best way to configure spark is through spark submit command used to execute code in cluster machine.
+bu using spark submit command:
+first we create sparkSession:
+from pyspark.sql import sparkSession
+spark = (
+	sparkSession
+	.builder						#we are not providing .master() b/c we will provide that in our spark submit command during runtime.
+	.appName("cluster execution")
+	.getOrCreate()
+)
+spark
+
+spark submit command:
+./bin/spark-submit --master spark://ID:PORT --num-executors 4 --executor-cores 2 --executor-memory 512M /home/file1.py
 
 cluster type:
 | Mode                   | Description                                                                                                |
@@ -1717,19 +1777,106 @@ df.rdd.getNumPartitions()
 Cluster partitions (resources) = how your cluster is split (nodes, executors, cores, memory)
 These refer to how your cluster resources are divided, not your data.
 
-🔢 How to calculate number of partitions by size for our data?--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+🔢 How to calculate number of partitions by size for our data?
 Step 1: Get file size (example: 1 GB = 1024 MB)
 Step 2: Divide by ideal partition size
 
 Example:
 
-1024 MB / 128 MB = 8 partitions
-Step 3: Apply using repartition()
+1024 MB / 128 MB = 8 partitions				#since ideal partition size is 128mb so dividing by it.
+			
+Step 3: Apply using repartition() if we want to increase or decrease the partition size.
 df = df.repartition(8)
 Now each partition ≈ 128MB.
 
+we can change partition size while reading the file by changing the config:
+Default = 128 MB
+		
+To reduce partition size to 64MB:
+spark.conf.set("spark.sql.files.maxPartitionBytes", 64 * 1024 * 1024)	# 64 MB
 
+OR
 
+To increase partition size to 256MB:
+#changed partition size from its default 128mb to 256mb:
+spark.conf.set("spark.sql.files.maxPartitionBytes", 256 * 1024 * 1024)  # 256 MB		#assume we applied this so 1gb file will be splitted in 4 parts while reading
+
+#then read the file:
+df = spark.read.csv("data.csv")
+print(df.rdd.getNumPartitions())
+#output:
+4				#since we have set the partition size to 256mb.
+#1 GB file / 256 MB per partition = 4 partitions
+👉 above config only affects the moment when the file is read.
+
+#performing shuffle
+df2 = df.groupBy("_c0").count()
+print(df2.rdd.getNumPartitions())
+#output
+200
+
+#Because the default numbre of partitions created:
+spark.sql.shuffle.partitions = 200
+
+Even though input had 4 partitions,
+after shuffle → 200 partitions.
+
+‼️ This clearly proves shuffle settings override the earlier partition count.
+
+Change the SHUFFLE partition count:
+  
+run below code before running the shuffle:
+spark.conf.set("spark.sql.shuffle.partitions", 50)
+
+Now run your groupBy again:
+
+df3 = df.groupBy("_c0").count()
+print(df3.rdd.getNumPartitions())
+
+#output:
+50
+
+Now shuffle creates 50 partitions, not 200.
+
+👉 This config only affects partitions AFTER a shuffle.
+It does NOT affect file reading.
+
+SAME WAY PARTITIONS ARE CREATED WHEN REPARTITION() , COALESCE() OR DURING WRITING THE FILE.
+df2 = df.repartition(50)	#create 50 new partitions
+
+df2 = df.coalesce(5)		#reduces number of partition to 5 WITHOUT shuffle
+
+df.write.parquet("path")	#if df has 10 partitions then spark will create 10 partition output files.
+#changing it during write time
+df.repartition(50).write.parquet("path")		#This creates 50 output partitions, hence 5 output files. this operation is same as above repartition operation.
+
+when dataframe partitions are created?
+DataFrame partitions are created when reading files (input splits), during shuffle operations (joins, groupBy), 
+or when the user explicitly calls repartition/coalesce, and sometimes automatically through Adaptive Query Execution.
+
+REFER spark_partitions.txt FILE FOR BETTER UNDERSTANDING.
+
+#CPU CORES VS MEMORY:
+🍳 CPU Cores → Number of Chefs
+
+More chefs = more dishes cooked at same time.
+
+🍽️ Memory → Size of Kitchen Table / Workspace
+
+Bigger workspace = chefs can handle more ingredients without dropping things.
+WE CAN MENTION IN OUR SPARK SUBMIT COMMAND:
+--executor-cores 4
+--executor-memory 8G
+
+It means:
+
+Each executor will run 4 tasks simultaneously
+
+Each executor gets 8GB RAM to store intermediate and cached data
+
+Spark runs fast only when both CPU + Memory are balanced.
+
+  
 
 
 
