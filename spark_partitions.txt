@@ -122,3 +122,55 @@
 5️⃣ **Optional repartition/coalesce** → manually override  
 
 ────────────────────────────────────────────────────────────────────────────
+
+
+************************************************************************************ REPARTITION *********************************************************************************
+Examples:
+1. n partitions
+df = df.repartition(10)
+df.write.format("parquet").option("mode","overwrite").save("/output/folder")
+
+print(df.rdd.getNumPartitions())
+#output
+10      #it will create 10 output partition files.
+
+2. repartition by a column
+df = df.repartition(col("country"))
+df.write.format("parquet").option("mode","overwrite").save("/output/folder")
+    #it will club values having same country name and create partition for each country.
+    #Number of partitions = Spark default shuffle partitions (200)
+df.rdd.getNumPartitions()
+#output
+200
+
+3. repartition to n partitions using column
+df = df.repartition(3,"country")              
+df.write.format("parquet").option("mode","overwrite").save("/output/folder")
+  #it will create OVERALL 3 output partition files based on hash function applied on country column which will have all the countries data in those 3 files. 
+  #NOTE: it WON'T create 3 partition output files for EACH DATE separately since repartition is done in memory and not during write operation.
+❗ Even though repartition used column "country",
+👉 data is not stored in subfolders
+👉 because you did NOT use partitionBy("country").
+
+4. Using repartition() + partitionBy()
+df = df.repartition(3,"country")              
+df.write.format("parquet").partitionBy("country").option("mode","overwrite").save("/output/folder")
+#output:
+/path/output/date=2023-01-01/part-00000.snappy.parquet
+/path/output/date=2023-01-02/part-00000.snappy.parquet
+/path/output/date=2023-01-03/part-00000.snappy.parquet
+...
+❗ BUT NUMBER OF FILES PER FOLDER ≠ 3
+Why?
+✔️ partitionBy("date") overrides Spark partitions
+so repartition is done in memory and partitionBy will overwrite repartition and it will create all the partitions.
+
+
+
+
+
+
+
+
+
+
