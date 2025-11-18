@@ -1876,7 +1876,86 @@ Each executor gets 8GB RAM to store intermediate and cached data
 
 Spark runs fast only when both CPU + Memory are balanced.
 
-  
+#UDF - User Defined Functions in Spark:
+why UDF is expensive and should we avaoid using in python?:
+https://youtu.be/bbNUiWfAP90?si=Yky8dk-g-GZiQ_Kg
+Simple explanation:
+1. when we write UDF inside our python program, the driver shares the UDF with all the executors inside each worker node.
+2. data is now serialized inside excutor in order for spark to understand it.
+3. data is processed row by row
+4. once the data is processed, the reults are reverted back to JVM available inside executors.
+5. the JVM report back to driver with the result.
+6. python UDF process resides in the same node where the JVM resides. and since the python UDF process is separate from JVM process, the JVM does not have control over the python UDF process which means spark does not have control over the python UDF process.
+7. so if the python UDF process grows in size and exceeds the memory limit then we will run OOM out of memory and there will be OOM error.
+
+demerits of using UDF:
+1. data needs to be serialize/deserialize
+2. independent python UDF process
+3. once python UDF process spinup in each node, the data has to be read row by row
+
+solution:
+1. not to use UDF, rather use high order functions.
+2. and if high order function is not possible then the UDF needs to be written in Java or Scala.
+3. because the UDF in java and scala will already be processed in JVM so we do not need to have a separate python UDF process and we can use this java/scala UDF within our python code itself.
+
+code:
+from pyspark.sql import sparkSession
+spark = (
+	sparkSession
+	.builder
+	.appName("User Defined Functions")
+	.master("spark://hostname:port")
+	.config("spark.executor.cores", 2)
+	.config("spark.cores.max",	6)			#since max cores can be 6, and we have set each executor will have only 2 cores then there will be only 3 executors across all the available nodes.
+	.config("spark.executor.memory", "512M")
+	.getOrCreate()
+)
+spark
+
+#if we go to spark UI: we can see 3 executors up and running (0, 1 and 2 with each executor have 2 cores, total 6 cores, 512 memory for each executor) and 1 special driver executor.
+
+#create a python function:
+import time
+def bonus(salary):
+	time.sleep(10)				#using sleep to check the running python UDF process in Docker CLI within that 10-second period.
+    return int(salary) * 0.1
+
+#register above python function as UDF:
+from pyspark.sql.functions import udf, col
+bonus_udf = udf(bonus)				#available for only dataframe API
+
+#below code is only to be run if we use spark SQL.
+spark.udf.register("bonus_sql_udf", bonus, "double")
+
+#now run the command in docker CLI:
+ps aux
+		 
+#using python 
+df = df.withColumn("bonus",bonus_udf(col("salary")))	#creating a new column for udf output
+df.show()
+
+#using spark sql expr function
+from pyspark.sql.functions import expr
+df = df.withColumn("bonus", expr("bonus_sql_udf(salary)"))	#creating a new column for udf output
+df.show()
+
+#using spark sql expr function without UDF
+df = df.withColumn("bonus",expr("salary * 0.1"))		#it will execute inside the JVM of executors itself. that's why it won't create python UDF process.
+df.show()
+
+#IMPORTANT
+#in case you have to write UDF and there is no option other than it then write it in Scala
+
+	
+#now again running the command in docker CLI to check the python UDF process after running above action:
+ps aux
+
+so this above python processes that we see in docker CLI is one of the demerit as it is used for data serialiazation and deserialiaztion.
+	
+now, go to spark UI: two jobs are created with 4 tasks (1 task in a separate job and 3 tasks in a separate job)
+expand one of tbe job > go to stage > scroll down and we can see it has taken too much of time in deserialization which it is deserializing the data which python UDF has written.
+https://youtu.be/bbNUiWfAP90?si=d9N0SzJbZo5Brkfc
+
 
 
 
