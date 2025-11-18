@@ -1,0 +1,56 @@
+#creating spark session
+https://youtu.be/RlLWMlDeS04?si=ZYyTABE-LX0BnHM7
+
+from pyspark.sql import sparkSession
+spark = (
+  sparkSession
+  .builder
+  .appName("Understanding DAG")
+  .master("local[*]")
+  .getOrCreate()
+)
+spark
+
+#from spark 2.0, AQE and broadcast join are enabled by default.
+#to know how DAG performs, we are now disabling AQE and broadcast join.
+spark.conf.set("spark.sql.adaptive.enabled",False)
+spark.conf.set("spark.sql.adaptive.coalescePartitions.enabled",False)
+spark.conf.set("spark.sql.autoBroadcastJoinThreshold",-1)
+
+#to check default task parallelism in spark
+spark.sparkContext.defaultParallelism
+#output 
+8
+
+#creating two dataframes with range from 2/4 till 200 by doing stepup of 2 and 4. so both the dataframe will contain even numbers
+df1 = spark.range(4,200,2)
+df2 = spark.range(2,200,4)
+
+#to check how many partitions our dataframe has.
+df1.rdd.getNumPartitions()
+#output 
+8
+df2.rdd.getNumPartitions()
+#output 
+8
+
+#performing repartition on dataframes
+df3 = df1.repartition(5)
+df4 = df2.repartition(7)
+
+df3.rdd.getNumPartitions()
+#output 
+5
+df4.rdd.getNumPartitions()
+#output 
+7
+#so the after doing repartition, there are 5/7 partitions instead of default 8.
+
+
+
+
+
+
+
+
+
