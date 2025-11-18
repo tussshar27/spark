@@ -1,0 +1,11 @@
+Wide transformation can involve multiple partitions.
+
+what are shuffle files?
+shuffle files are serialized in tungsten binary format (also known as Unsafe Row). these files can directly be read in memory thus improving read performance.
+once these temporary files are written, in the next stage spark will read these files and perform the remaining narrow transformations.
+this is how spark follows two processes, in first process it will perform narrow transformations and create temporary shuffle files and in the sencond process it will read those created temporary shuffle files and perform the remaining narrow transformations. 
+NOTE: these shuffle files aree written to disk. and they are sent to other executors within the network.
+this involves disk IO operations and network which is a costly operation in spark. that's why is it important to avoid shuffle in spark.
+but in some scenario we cannot avoid wide transformation so in that can we have optimize shuffle.
+
+spark in first stage execute all the narrow transformations and in the end it will write shuffle files. 
