@@ -11,3 +11,153 @@ this involves disk IO operations and network which is a costly operation in spar
 but in some scenario we cannot avoid wide transformation so in that can we have optimize shuffle.
 
 spark in first stage execute all the narrow transformations and in the end it will write shuffle files. 
+
+from pyspark.sql import SparkSession
+spark = (
+  SparkSession
+  .builder
+  .appName("Optimize Shuffle")
+  .master("spark://hostname:port")
+  .config("spark.cores.max",16)
+  .config("spark.executor.cores",4)
+  .config("spark.executor.memory","512M")
+  .getOrCreate()
+)
+spark
+
+in spark UI:
+A job is created > have 16 cores , 512Mb memory per executor > have 4 executors , each executor has 4 cores and 512M memory
+
+#to check default parallelism, since we have 4 executors and each have 4 cores then it total we have 16 tasks
+spark.sparkContext.defaultParallelism
+16
+
+#disable AQE and broadcast join
+spark.conf.set("spark.sql.adaptive.enabled",False)
+spark.conf.set("spark.sql.adaptive.coalescePartitions.enabled",False)
+spark.conf.set("spark.sql.autoBroadcastJoinThreshold",-1)
+
+#reading csv file
+#building schema
+_schema = "first_name string, last_name string, job_title string, dob string, email string, phone string, salary double, department_id int"
+empdf = spark.read.format("csv").schema(_schema).option("header",True).load("/data/input/file1.csv")
+
+#if we run the above code and we have defined the schema manually so in spark UI NO job should get created by spark to read the file schema , in short nothing should get created in spark UI.
+
+#find avg salary per dept
+from pyspark.sql.functions import avg, col
+df = empdf.groupBy(col("dept")).agg(avg(col("salary")).alias("avg_sal"))
+df.show()
+#output
++--------+--------+
+| dept   | avg_sal|
++--------+--------+
+| HR     | 45000  |
+| IT     | 72000  |
+| SALES  | 38000  |
++--------+--------+
+
+#write the data
+#IMPORTANT
+#noop is used for performance benchmarking. so before actually writing, use noop to check the performance.
+#noop is used to test the data with no actual writing
+df.write.format("noop").mode("overwrite").option("header",True).save("/data/output/file1")    #passing the folder name
+
+#now go to spark UI > we can see 1 job is created > 2 stages are created > 1st stage (16 tasks), 2nd stage (200 tasks)
+1st stage: 
+tasks column: 16 tasks
+input column: reading data 93Mb
+shuffle write column: 11.2Kb
+
+2nd stage:
+tasks column: 200 tasks
+shuffle read column: 11.2Kb
+
+why in 2nd stage there are 200 tasks?
+because by default shuffle partitions are 200
+spark.conf.get("spark.sql.shuffle.partitions")
+#output
+200
+
+in spark UI, open 1st stage:
+we can see all 4 executors with 4 tasks each and has written 40 shuffle write records each.
+
+why 40 records are written by each executor here?
+if we check the data in a particular partition , we find there are multiple departments in each partition
+from pyspark.sql.functions import spark_partition_id
+df.withColumn("partition_id",spark_partition_id()).where("partition_id = 0").show()
+#we will see there are multiple departments in a same partition, as per our data there are 10 departments in each task
+#since executor has 4 tasks , so 4 * 10 = 40 records.
+
+now open 2nd stage:
+it has created 200 tasks.
+we can see the number of records read are very less in comparison to the number of tasks that are involved.
+and if you scroll down, we can see the working of each task in that most of the tasks have done nothing , very few tasks have read the shuffle read records from stage 1.
+which is overkill of the CPU usage.
+
+if you click on SQL/Dataframe:
+we can see it took 11s to save after hitting action.
+
+how would you optimize it?
+so we have to decide the number of shuffle read tasks in order to optimize it.
+lets decrease these shuffle partitions into an appropriate number.
+
+#setting up shuffle partitions to 100 instead of the default 200
+spark.conf.set("spark.sql.shuffle.partitions",100)
+
+#now rerun the dataframe code of writing of data to check whether most of the shuffle partitions are utilized or not.
+#go to spark UI now, click on SQL/Dataframe : the save job is created with duration of 3s.
+go to the particular job > it has created two stages > 1st stage (16 tasks) 2nd stage (100 tasks)
+open 2nd stage: again it is an overkill b/c much of the tasks are doing nothing, only few of them are reading.
+
+can reduce the shuffle partitions again?
+yes
+lets make to 16 now.
+spark.conf.set("spark.sql.shuffle.partitions",16)
+
+now the save job is duration is reduced to 1s.
+
+so this is how we optimize spark shuffle partitions.
+
+#NOTE: be careful while lowering the shuffle partitions, as it may use same partitions in iteration if the data is more.
+so how to decide w=how much should be the shuffle partitions?
+
+how to decide exact number of shuffle partitions?
+go to spark UI > check for data size of shuffle read/write
+apply formula:
+shuffle partitions = data size of shuffle read or write / partition size
+lets say shuffle read/write = 40 gb = 40 * 1028 mb = 40960mb
+partition size = 128mb
+therefore, shuffle partitions = 40960  / 128mb = 320 partitions
+
+if AQE is enabled then it can also do automatically.
+When AQE is enabled, Spark dynamically merges or splits shuffle partitions at runtime based on the actual size of data read during a shuffle.
+
+AQE rewrites your partition count even if you set it manually:
+spark.sql.shuffle.partitions = 800
+AQE may override it depending on the actual runtime data.
+
+
+what if we read a partitioned data? will that improve performance?
+df = spark.read.format("csv").schema(_schema).option("header",True").load("data/input/file2")
+df.write.format("noop").mode("overwrite").save()    #NOTE: it is oop that's why we are not giving any path in save() , if it was any other format then it would have failed.
+
+now save job completed in 2s.
+in spark UI, 1st stage (15 tasks) and 2nd stage (16 tasks) but for 1sta stage the shuffle write data size was very small because..
+if we open tasks, each task was writitng only 1 record because it is reading a particular partition data and there is no mix and match for that particular task. 
+and each of the executor was shuffle writing only 4 to 6 recrds.
+and if we go to 2nd stage which has 16 tasks, so almost all the tasks were reading hte shuffle data.
+so there is a performance benefit if we read partitioned data.
+
+so make sure your data is properly partitioned by repartition if required.
+
+
+
+
+
+
+
+
+
+
+
