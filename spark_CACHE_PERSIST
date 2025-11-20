@@ -1,0 +1,85 @@
+from pyspark.sql import SparkSession
+spark = (
+  SparkSession
+  .builder
+  .appName("Cache and Persist")
+  .master("local[*]")                              #using local machine instead of spark standalone cluster
+  .config("spark.executor.memory","512M")          #restricting executor memory to 512MB
+  .getOrCreate()
+)
+
+spark
+
+now go to spark UI:
+www.localhost:4040/
+go to Environment tab > verify the memory set for the executor
+spark.executor.memory = 512M
+spark.master = local[*]
+
+#read sales csv file of 752mb in size ~ 7.2M records
+_schema = "transacted_at string, trx_id string, retailer_id string, description string, amount double, city_id string"
+df = spark.read.format("csv").schema(_schema).option("header",True).load("data/input/file1")
+
+#since we are already defining the schema, there will be no job created after running above code
+
+df.where("amount > 300").show()
+#after running above where clause, go to spark UI > SQL/Dataframe tab > open the job created > we can see scan the file DAG
+#so we have already scanned our file in first step but here while using where clause also spark is again scanning the file.
+
+#lets cache a particular dataframe
+df.cache()
+#after running above code, there is no job or storage RDD created in spark UI
+#because cache() need action like count and write then only it can scan the whole dataset resulting in proper caching.
+
+df.cache().count()
+#now go  to spark UI > storage tab > storage RDD is created for cache
+#notice the storage level column, it is "Disk Memory Deserialized 1x Replicated" which is default setting of cache
+#check "size in memory" and "size on disk" columns, and some of the data is in memory and some of the data spilled to disk.
+#because we have a dataset which is greater than the memory of the executor.
+
+#IMPORTANT
+#NOTE: the default storage level for cache in dataframe and dataset is MEMORY_AND_DISK .
+#NOTE: the default storage level for cache in RDD is MEMORY_ONLY.
+
+df.where("amount > 300").show()
+#go to spark UI > SQL/Dataframe, we can see a job is created, open it > scan csv = 0, InMemoryTableScan = 10000 records scanned.
+#here InMemoryTableScan referred to cache that we just created.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
