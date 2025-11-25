@@ -1,1 +1,21 @@
+https://youtu.be/JB98Loobc7k?si=QBT8bqglWQoqrpO5
+
+SPARK provides two types of variables in distributed manner:
+1. Broadcast Variable
+2. Accumulators
+
+from pyspark.sql import SparkSession
+spark = (
+  SparkSession
+  .builder
+  .appName("Distributed Shared Variable")
+  .master("spark://hostname:port")
+  .config("spark.cores.max",16)
+  .config("spark.executor.cores",4)
+  .config("spark.executor.memory","512M")
+  .getOrCreate()
+)
+
+spark
+
 
