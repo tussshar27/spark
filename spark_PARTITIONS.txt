@@ -1,3 +1,88 @@
+✅ 1. DataFrame Partitions (Input Partitions)
+
+➤ These are partitions created when Spark READS the data.
+
+How they are created?
+
+Spark splits the input file(s) into chunks.
+
+Default chunk size = 128 MB (spark.sql.files.maxPartitionBytes)
+
+So a 640 MB file → 5 partitions (640 / 128 = 5)
+
+
+When they are used?
+
+Used before any transformation (original partitions from the source).
+
+
+Can you control them?
+
+Yes:
+
+spark.conf.set("spark.sql.files.maxPartitionBytes", 128*1024*1024)
+df = spark.read.parquet("/path/")
+
+Or explicitly:
+
+df = spark.read.option("maxPartitionBytes", 268435456).parquet("/path")
+
+
+---
+
+🌟 Default value of DataFrame partitions
+
+Property	Default
+
+spark.sql.files.maxPartitionBytes	134217728 bytes = 128 MB
+
+
+So, default number of input partitions depends on file size.
+
+
+---
+
+✅ 2. Shuffle Partitions (After Wide Transformations)
+
+➤ Created when Spark performs a SHUFFLE
+Examples of shuffle operations:
+
+groupBy
+
+agg
+
+join
+
+distinct
+
+orderBy
+
+repartition(n) (wide)
+
+reduceByKey
+
+
+These create new partitions, not related to input partitions.
+
+Default number
+
+Controlled by:
+
+spark.sql.shuffle.partitions
+
+
+---
+
+🌟 Default value of Shuffle partitions
+
+Property	Default
+
+spark.sql.shuffle.partitions	200
+
+
+So after a shuffle, Spark creates 200 partitions regardless of input partition count.
+
+
 🔥 Combined Example (Easy to Remember)
 
 Imagine you read a 1 GB file:
