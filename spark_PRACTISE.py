@@ -1958,6 +1958,36 @@ https://youtu.be/bbNUiWfAP90?si=d9N0SzJbZo5Brkfc
 
 
 
+🔹 Predicate Pushdown
+Move filters closer to data source.
+df = spark.read.parquet("users.parquet").filter("age > 30")
+🔹 Constant Folding
+WHERE age > 10+5 → WHERE age > 15
+🔹 Column Pruning
+Remove unused columns.
+df = customer.select("name", "age")
+🔹 Projection Pushdown
+Reading only necessary columns at the data source
+Here in below example, Column pruning happens first to analyze our query then projection pushdown takes place to filter the required columns at source.
+spark.read.parquet("customer").select("name")
+🔹 Filter Reordering
+Put most selective filters first.
+df.filter("age > 10").filter("city = 'Mumbai'")
+Imagine:
+
+Only 1% of users are from Mumbai (highly selective)
+
+But 90% of users are age > 10 (not selective)
+
+Spark will reorder internally:
+python
+Copy code
+df.filter("city = 'Mumbai'").filter("age > 10")
+So the query becomes faster because Spark reduces the dataset early.
+🔹 Eliminating Unnecessary Computations
+Remove redundant operations.
+
+
 							   
 
 
