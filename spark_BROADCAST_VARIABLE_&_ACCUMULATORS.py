@@ -74,7 +74,7 @@ broadcast_dept_names.value
 from pyspark.sql.functions import udf, col
 @udf
 def get_dept_names(dept_id):
-    return broadcast_dept_names.value.get(dept_id)
+    return broadcast_dept_names.value.get(dept_id)    #NOTE: by passing dept_id key as input, we get dept_name value as output. since it is a dictionary having key and value pair.
 
 #to use above udf, we will create a new column
 emp_final = emp.withColumn("dept_name",get_dept_names(col("department_id")))
@@ -82,6 +82,16 @@ emp_final = emp.withColumn("dept_name",get_dept_names(col("department_id")))
 #even after running above code, there is no job created in spark UI because we haven't called any action.
 
 emp_final.show()
+
+#now go ton spark UI > job > stage: we can see the DAG is happening in a single stage that is because there is no shuffling involved as the broadcast variable pass the data to each executor for operation.
+#we have distributed broadcast variable in each of the executor.
+
+
+#ACCUMULATORS -another type of distributed shared variable.
+-> we know that our data is distributed in all executors for a particular department.
+-> so our data will rely with different partitions in each of the executor for that particular department. so to calculate sum or count, we have to bring 
+#usecase: to calculate total salary of Department 6.
+
 
 
 
