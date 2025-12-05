@@ -1,4 +1,9 @@
 https://youtu.be/JB98Loobc7k?si=QBT8bqglWQoqrpO5
+https://chatgpt.com/s/t_6932a26ed188819194d75d72adb72c4f
+
+✅ What is a Broadcast Variable in PySpark?
+A broadcast variable allows you to send a small dataset (lookup table, config, mapping, list, dictionary, etc.) to all executors only once, instead of sending it with every task.
+It helps to reduce network I/O and speed up joins and lookups.
 
 SPARK provides two types of variables in distributed manner which are distributed shared variables:
 1. Broadcast Variable
@@ -74,7 +79,7 @@ broadcast_dept_names.value
 from pyspark.sql.functions import udf, col
 @udf
 def get_dept_names(dept_id):
-    return broadcast_dept_names.value.get(dept_id)    #NOTE: by passing dept_id key as input, we get dept_name value as output. since it is a dictionary having key and value pair.
+    return broadcast_dept_names.value.get(dept_id,"unknown")    #NOTE: by passing dept_id key as input, we get dept_name value as output. since it is a dictionary having key and value pair.
 
 #to use above udf, we will create a new column
 emp_final = emp.withColumn("dept_name",get_dept_names(col("department_id")))
@@ -86,10 +91,108 @@ emp_final.show()
 #now go ton spark UI > job > stage: we can see the DAG is happening in a single stage that is because there is no shuffling involved as the broadcast variable pass the data to each executor for operation.
 #we have distributed broadcast variable in each of the executor.
 
+#2nd example:
+from pyspark.sql import SparkSession
+
+spark = SparkSession.builder.appName("BroadcastExample").getOrCreate()
+
+# Small lookup dictionary
+country_lookup = {
+    1: "India",
+    2: "USA",
+    3: "UK"
+}
+
+# Broadcast it
+broadcast_lookup = spark.sparkContext.broadcast(country_lookup)
+
+
+df = spark.createDataFrame([
+    (1, "Tushar"),
+    (2, "Rahul"),
+    (3, "John")
+], ["id", "name"])
+
+# Use broadcast variable inside a UDF
+from pyspark.sql.functions import udf
+from pyspark.sql.types import StringType
+
+def lookup_country(id):
+    return broadcast_lookup.value.get(id, "Unknown")        #syntax:dict.get(key, default) , so if there is no value for that id then "unknown" will be displayed.
+
+lookup_udf = udf(lookup_country, StringType())
+
+df2 = df.withColumn("country", lookup_udf("id"))
+df2.show()
+
+
+#output
++---+------+---------+
+| id| name | country |
++---+------+---------+
+|  1|Tushar| India   |
+|  2|Rahul | USA     |
+|  3|John  | UK      |
++---+------+---------+
+
+#how broadcast variable works internally?
+🚀 What Actually Happens Internally When You Use a Broadcast Variable
+Assume you write:
+
+lookup = {1: "India", 2: "USA"}
+broadcast_lookup = spark.sparkContext.broadcast(lookup)
+
+1️⃣ The broadcast value lives on the DRIVER first
+The dictionary {1: "India", 2: "USA"} exists only on the driver when created.
+Driver:
+    broadcast_lookup.value = {1: "India", 2: "USA"}
+No executor knows about it yet.
+
+2️⃣ Spark SERIALIZES the broadcast value
+Spark converts the dictionary into a compact binary format.
+This reduces size → faster network transfer.
+
+3️⃣ Spark distributes it to ALL executors (only ONCE)
+🚫 Spark does NOT send broadcast data with each task
+✅ Spark sends it ONCE per executor
+Executors receive the serialized broadcast value and store it in their Block Manager memory:
+Executor 1:
+    broadcast_copy = {1: "India", 2: "USA"}
+
+Executor 2:
+    broadcast_copy = {1: "India", 2: "USA"}
+
+Executor 3:
+    broadcast_copy = {1: "India", 2: "USA"}
+This is why broadcast variables save huge network cost.
+
+4️⃣ Tasks running on executors read the copy locally
+Now when you call:
+broadcast_lookup.value.get(id)
+
+Each task reads the dictionary from local memory, not from the driver.
+⚡ This is extremely fast (no network call).
+
+       Driver
+         |
+Broadcast only ONCE
+         ↓
+ ┌───────────────┬───────────────┬───────────────┐
+ |   Executor 1   |   Executor 2   |   Executor 3   |
+ |  Local copy    |  Local copy    |  Local copy    |
+ | {1: 'India'}   | {1: 'India'}   | {1: 'India'}   |
+ └───────────────┴───────────────┴───────────────┘
+         |
+ Tasks on executors read it locally (super fast)
+
+  
+
 
 #ACCUMULATORS -another type of distributed shared variable.
 -> we know that our data is distributed in all executors for a particular department.
--> so our data will rely with different partitions in each of the executor for that particular department. so to calculate sum or count, we have to bring 
+-> so our data will rely with different partitions in each of the executor for that particular department. so to calculate sum or count, we have to bring .
+Accumulators are variables used for aggregating information across executors in a distributed Spark application.
+An Accumulator is a shared variable whose value can only be added to, not read by executors.                                                                                                                                       
 #usecase: to calculate total salary of Department 6.
 
 
