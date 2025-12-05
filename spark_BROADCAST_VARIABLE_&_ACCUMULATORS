@@ -1,6 +1,6 @@
 https://youtu.be/JB98Loobc7k?si=QBT8bqglWQoqrpO5
 
-SPARK provides two types of variables in distributed manner:
+SPARK provides two types of variables in distributed manner which are distributed shared variables:
 1. Broadcast Variable
 2. Accumulators
 
@@ -16,6 +16,72 @@ spark = (
   .getOrCreate()
 )
 
+#so above code will spinup 4 executors with 4 cores each and 512MB memory.
+
 spark
+
+working of broadcast variable:
+1. whenever we create a broadcast variable, it is sent to all the executors that we have.
+2. it is cached in all the executors. since we have this partition of data in all the executors so now it can perform join or all the other operations that is required.
+3. once the execution is done, all the executors can send out the resultset separately. and they don't need to shuffle data between them.
+4. that's why it is known as distributed shared variable because this particular variable is distributed across the cluster.
+
+Example:
+dictionary variable:
+dept_names = {
+1:'dept 1',
+2:'dept 2',
+3:'dept 3',
+4:'dept 4',
+5:'dept 5',
+6:'dept 6',
+7:'dept 7',
+8:'dept 8',
+9:'dept 9',
+10:'dept 10'
+}
+
+#to send this variable to all the executors, we need to create a broadcast variable.
+#creating a broadcast variable
+broadcast_dept_names = spark.sparkContext.broadcast(dept_names)
+
+#to check the type of variable
+type(broadcast_dept_names)
+#output:
+pyspark.broadcast.Broadcast
+
+#to get the value of broadcast variable
+broadcast_dept_names.value
+#output:
+{
+1:'dept 1',
+2:'dept 2',
+3:'dept 3',
+4:'dept 4',
+5:'dept 5',
+6:'dept 6',
+7:'dept 7',
+8:'dept 8',
+9:'dept 9',
+10:'dept 10'
+}
+
+#create UDF to return department name
+from pyspark.sql.functions import udf
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
