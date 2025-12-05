@@ -66,11 +66,22 @@ broadcast_dept_names.value
 10:'dept 10'
 }
 
+#now after executing, if you go to jobs then you still won't find any jobs because we haven't hit any action.
+#as per theory, we know this variable will be cached in each of the executor.
+#we need to create a UDF in order to use it
 #create UDF to return department name
-from pyspark.sql.functions import udf
 
+from pyspark.sql.functions import udf, col
+@udf
+def get_dept_names(dept_id):
+    return broadcast_dept_names.value.get(dept_id)
 
+#to use above udf, we will create a new column
+emp_final = emp.withColumn("dept_name",get_dept_names(col("department_id")))
 
+#even after running above code, there is no job created in spark UI because we haven't called any action.
+
+emp_final.show()
 
 
 
