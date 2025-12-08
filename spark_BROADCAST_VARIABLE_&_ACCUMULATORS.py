@@ -190,19 +190,138 @@ Broadcast only ONCE
 
 #ACCUMULATORS -another type of distributed shared variable.
 -> we know that our data is distributed in all executors for a particular department.
--> so our data will rely with different partitions in each of the executor for that particular department. so to calculate sum or count, we have to bring .
+-> so our data will rely with different partitions in each of the executor for that particular department. so to calculate sum or count, we have to bring together.
 Accumulators are variables used for aggregating information across executors in a distributed Spark application.
 An Accumulator is a shared variable whose value can only be added to, not read by executors.                                                                                                                                       
-#usecase: to calculate total salary of Department 6.
+
+#usecase: to calculate total salary of a particular Department 6.
+data is distributed into multiple executors for the particular department.
+so the data will rely in different partitions in each of the executor for that particular department.
+in order to calculate, we need to bring the data from all of the executors to a specific executor and do the sum.
+if we see above, we have involved shuffle between the executors in this operation.
+so is there any alternative and fault tolerance way? Accumulators.
+accumulators is a variable that will be processed row by row in a distributed fashion in each of the executors that will be updated everytime when a row is processed. then we can get the final value of the accumulators to get the sum whcih we required.
+Stored on driver.
+Executors will receive a copy during task execution.
+Only supports add/update, no reads by executors.
+
+#example
+to calculate total salary of a particular Department 6.
+#in pyspark
+emp.filter(col("depatment_id") == 6).agg(sum(col("salary")).cast("long").alias("sum_salary")).show()  #casting in long becausae the value is showing in 5.424546E9
+  OR
+emp.filter("depatment_id = 6").agg(sum(col("salary")).cast("long").alias("sum_salary")).show()
+# using accumulator
+dept_sal = spark.sparkContext.accumulator(0)   # default value = 0
+
+# define function
+def calc_salary(department_id, salary):
+    if department_id == 6:
+        dept_sal.add(salary)
+
+# foreach on DataFrame
+emp.foreach(lambda row: calc_salary(row.department_id, row.salary))
+
+# get accumulator value
+print(dept_sal.value)
+
+spark.stop()
+
+#note : foreach loop is same as forin loop in python
+numbers = [10, 20, 30]
+for n in numbers:
+    print(n)
 
 
 
 
 
+✅ Think of Spark like a company
+👉 Driver = Manager
+👉 Executors = Employees
+👉 Accumulator = A box kept in manager’s office
+📌 **Executors can put values into the box …
+
+but executors cannot see what is inside the box.**
+
+Only the Driver (manager) can open the box and read the final value.
+
+🔍 Why can executors NOT read accumulator values?
+
+Because each executor is running on a different machine, and Spark does not keep accumulator value updated across all machines during the job.
+
+Executor workflow:
+
+Executor works on its own data
+
+Adds numbers to accumulator
+
+At the end of the task → sends the update to driver
+
+Driver merges all updates
+
+Executors never receive the merged value back.
+
+🧠 Simple example to understand
+
+Imagine 10 employees counting bills:
+
+Employee	Bills counted
+Emp 1	100
+Emp 2	200
+Emp 3	300
+All employees put their numbers into one box in manager’s office.
+
+But…
+
+Employees cannot open the box
+
+Only manager can open and see total = 600
+
+This is exactly how Spark accumulators work.
+
+❌ Why your logic cannot work:
+if dept_sal.value > 500000:
+   do_something()
 
 
+Why ❌?
+
+Executors cannot read dept_sal.value
+
+They don’t know the final value
+
+Value is available only on driver after job is completed
+
+Executors do not have access to the live accumulator value.
+
+⭐ Correct way to understand in one line:
+
+Accumulators are write-only for executors and read-only for the driver.
+Executors can add values but cannot see the accumulated value.
+
+✔ Mini Diagram
+Executor 1 ---- adds 1000 ----\
+                                \
+Executor 2 ---- adds 2000 ------>  Accumulator (on DRIVER)
+                                 /
+Executor 3 ---- adds 3000 ----/
 
 
+Executors ➜ send updates
+Driver ➜ reads final value
+
+Executors never read back the accumulator.
+
+If you want, I can also explain:
+
+Why Spark designed it this way
+
+How accumulator updates flow internally
+
+What happens if a task retries
+
+Just tell me and I’ll explain in very simple words.
 
 
 
