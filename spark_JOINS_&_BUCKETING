@@ -1,0 +1,103 @@
+how join works in spark?
+-> spark reads the data
+-> data shuffling happens between the executors
+-> spark joins the data
+-> spark perform write/count
+
+types of joins:
+1. Shuffle Hash Join
+steps:
+a. data will be shuffled for both datasets.
+b. smaller dataset will be hashed
+c. hashed dataset will be matched with big dataset
+d. join is performed.
+
+if you see there is no sorting and hashing is done.
+so this method is reliable only if you have a smaller dataset that can be easily fit in memory.
+
+2. (Shuffle) Sort Merge Join
+steps:
+a. data will be shuffled for both datasets.
+b. sorting of key data is done
+c. once sorting is done then it will be merged.
+
+this is reliable for joining two big datasets.
+
+3. Broadcast Join
+steps:
+a. smaller dataset is broadcasted to all the executors.
+b. once the dataset is present in all the executors then hashing happens which is known as broadcast hash join.
+c. the default value of smaller dataset is 10MB . and this can be increased to 8GB using spark conf (spark.sql.autoBroadcastJoinThreshold)
+
+code:
+from pyspark.sql import SparkSession
+spark = (
+  SparkSession
+  .builder
+  .appName("Optimizing Joins")
+  .master("spark://hostname:port")
+  .config("spark.cores.max", 16)
+  .config("spark.executor.cores", 4)
+  .config("spark.executor.memory", "512M")
+  .getOrCreate()
+)
+
+spark
+
+#to understand better, disabling AQE and broadcast join
+spark.conf.set("spark.sql.adaptive.enabled", False)
+spark.conf.set("spark.sql.adaptive.coalescePartitions.enabled", False)
+spark.conf.set("spark.sql.autoBroadcastJoinThreshold", -1)
+
+#joining small with small table is easier as we don't need to see optimization.
+
+# Read EMP CSV data
+_schema = "first_name string, last_name string, job_title string, dob string, email string, phone string, salary double, department_id int"
+
+emp = spark.read.format("csv").schema(_schema).option("header", True).load("/data/input/datasets/employee_records.csv")
+
+
+# Read DEPT CSV data
+_dept_schema = "departmentId int, department_name string, description string, city string, state string, country string"
+
+dept = spark.read.format("csv").schema(_dept_schema).option("header", True).load("/data/input/datasets/department_data.csv")
+
+#NOTE: above reading of datasets won't create any job in spark UI because we are passing data schema while reading to spark above.
+
+# joining both datasets normally.
+
+df_joined = emp.join(dept, on=emp.department_id==dept.department_id, how="left_outer")
+
+df_joined.write.format("noop").mode("overwrite").save()
+df.explain()
+== Physical Plan ==
+*(4) SortMergeJoin [department_id#7], [department_id#16], LeftOuter
+:- *(1) Sort [department_id#7 ASC NULLS FIRST], false, 0
+:  +- Exchange hashpartitioning(department_id#7, 200), ENSURE_REQUIREMENTS, [id=#70]
+:     +- FileScan csv [first_name#0,last_name#1,job_title#2,dob#3,email#4,phone#5,salary#6,department_id#7]
+:        Batched: false, DataFilters: [], Format: CSV,
+:        Location: InMemoryFileIndex(1 paths)[file:/data/input/datasets/employee_records.csv],
+:        PartitionFilters: [], PushedFilters: [], ReadSchema:
+:        struct<first_name:string,last_name:string,job_title:string,dob:string,email:string,
+:        phone:string,salary:string,department_id:int>
++- *(3) Sort [department_id#16 ASC NULLS FIRST], false, 0
+   +- Exchange hashpartitioning(department_id#16, 200), ENSURE_REQUIREMENTS, [id=#82]
+      +- *(2) Filter isnotnull(department_id#16)
+         +- FileScan csv [department_id#16,department_name#17,description#18,city#19,state#20,country#21]
+            Batched: false, DataFilters: [isnotnull(department_id#16)], Format: CSV,
+            Location: InMemoryFileIndex(1 paths)[file:/data/input/datasets/department_data.csv],
+            PartitionFilters: [], PushedFilters: [IsNotNull(department_id)],
+            ReadSchema: struct<department_id:int,department_name:string,description:string,
+            city:string,state:string,country:string>
+
+
+
+
+
+
+
+
+
+
+
+
