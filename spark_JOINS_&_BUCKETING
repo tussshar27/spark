@@ -51,6 +51,8 @@ spark.conf.set("spark.sql.autoBroadcastJoinThreshold", -1)
 
 #joining small with small table is easier as we don't need to see optimization.
 
+#we will start with joining big with small table
+
 # Read EMP CSV data
 _schema = "first_name string, last_name string, job_title string, dob string, email string, phone string, salary double, department_id int"
 
@@ -58,37 +60,175 @@ emp = spark.read.format("csv").schema(_schema).option("header", True).load("/dat
 
 
 # Read DEPT CSV data
-_dept_schema = "departmentId int, department_name string, description string, city string, state string, country string"
+_dept_schema = "department_id int, department_name string, description string, city string, state string, country string"
 
 dept = spark.read.format("csv").schema(_dept_schema).option("header", True).load("/data/input/datasets/department_data.csv")
+
+#for joining above two datasets, department_id column will be used to join.
 
 #NOTE: above reading of datasets won't create any job in spark UI because we are passing data schema while reading to spark above.
 
 # joining both datasets normally.
 
-df_joined = emp.join(dept, on=emp.department_id==dept.department_id, how="left_outer")
+df_joined = emp.join(dept, on=emp.department_id==dept.department_id, how="left_outer")    #we want to retain all the records from emp dataset so doing left outer join.
 
-df_joined.write.format("noop").mode("overwrite").save()
+df_joined.write.format("noop").mode("overwrite").save()      # noop will create a job since it is an action.
+
 df.explain()
 == Physical Plan ==
-*(4) SortMergeJoin [department_id#7], [department_id#16], LeftOuter
-:- *(1) Sort [department_id#7 ASC NULLS FIRST], false, 0
-:  +- Exchange hashpartitioning(department_id#7, 200), ENSURE_REQUIREMENTS, [id=#70]
+*(4) SortMergeJoin [department_id#7], [department_id#16], LeftOuter                                #in physical plan, SortMerge is the joining strategy used between both datasets.
+:- *(1) Sort [department_id#7 ASC NULLS FIRST], false, 0                     #emp data             #each partition in sorted by department_id
+:  +- Exchange hashpartitioning(department_id#7, 200), ENSURE_REQUIREMENTS, [id=#70]                #200 are default suffle partitions count
 :     +- FileScan csv [first_name#0,last_name#1,job_title#2,dob#3,email#4,phone#5,salary#6,department_id#7]
 :        Batched: false, DataFilters: [], Format: CSV,
 :        Location: InMemoryFileIndex(1 paths)[file:/data/input/datasets/employee_records.csv],
 :        PartitionFilters: [], PushedFilters: [], ReadSchema:
 :        struct<first_name:string,last_name:string,job_title:string,dob:string,email:string,
 :        phone:string,salary:string,department_id:int>
-+- *(3) Sort [department_id#16 ASC NULLS FIRST], false, 0
-   +- Exchange hashpartitioning(department_id#16, 200), ENSURE_REQUIREMENTS, [id=#82]
-      +- *(2) Filter isnotnull(department_id#16)
++- *(3) Sort [department_id#16 ASC NULLS FIRST], false, 0                    #dept data
+   +- Exchange hashpartitioning(department_id#16, 200), ENSURE_REQUIREMENTS, [id=#82]              #200 are default suffle partitions count
+      +- *(2) Filter isnotnull(department_id#16)                                                      #spark applies filter pushdown to right side table
          +- FileScan csv [department_id#16,department_name#17,description#18,city#19,state#20,country#21]
             Batched: false, DataFilters: [isnotnull(department_id#16)], Format: CSV,
             Location: InMemoryFileIndex(1 paths)[file:/data/input/datasets/department_data.csv],
             PartitionFilters: [], PushedFilters: [IsNotNull(department_id)],
             ReadSchema: struct<department_id:int,department_name:string,description:string,
             city:string,state:string,country:string>
+
+exchange both datasets > sort both datasets > merge join
+
+1️⃣ SortMergeJoin (LeftOuter)
+->
+Spark is performing a Left Outer Join between:
+employee_records.csv (left table)
+department_data.csv (right table)
+Join key: department_id
+Join strategy chosen: Sort-Merge Join
+Reason: both sides are large, no broadcast, and join key is sortable.
+
+2️⃣ Why Sort-Merge Join was chosen
+->
+Spark chooses SortMergeJoin when:
+Join key is equality join
+Both datasets are large
+spark.sql.autoBroadcastJoinThreshold not satisfied
+Join key is sortable
+
+Spark performs a Sort-Merge Left Outer Join by shuffling both datasets on department_id, sorting them within each partition, and then merging the sorted partitions. 
+This strategy is chosen because both datasets are large and cannot be broadcast.
+
+#now to optimize big and small tables, so we can perform a broadcast join.
+from pyspark.sql.functions import broadcast
+
+df_joined = emp.join(broadcast(dept),on=emp.department_id==dept.department_id,how="left_outer")
+
+df_joined.write.format("noop").mode("overwrite").save()
+
+df_joined.explain()
+
+== Physical Plan ==
+*(2) BroadcastHashJoin [department_id#7], [department_id#16], LeftOuter, BuildRight, false
+:- FileScan csv [first_name#0,last_name#1,job_title#2,dob#3,email#4,phone#5,salary#6,department_id#7]
+:  Batched: false,
+:  DataFilters: [],
+:  Format: CSV,
+:  Location: InMemoryFileIndex(1 paths)[file:/data/input/datasets/employee_records.csv],
+:  PartitionFilters: [],
+:  PushedFilters: [],
+:  ReadSchema: struct<
+:    first_name:string,
+:    last_name:string,
+:    job_title:string,
+:    dob:string,
+:    email:string,
+:    phone:string,
+:    salary:string,
+:    department_id:int>
++- BroadcastExchange HashedRelationBroadcastMode(
+      List(cast(input[0, int, false] as bigint)), false),
+   [id=#160]
+   +- *(1) Filter isnotnull(department_id#16)
+      +- FileScan csv [department_id#16,department_name#17,description#18,city#19,state#20,country#21]
+         Batched: false,
+         DataFilters: [isnotnull(department_id#16)],
+         Format: CSV,
+         Location: InMemoryFileIndex(1 paths)[file:/data/input/datasets/department_data.csv],
+         PartitionFilters: [],
+         PushedFilters: [IsNotNull(department_id)],
+         ReadSchema: struct<
+           department_id:int,
+           department_name:string,
+           description:string,
+           city:string,
+           state:string,
+           country:string>
+
+
+
+#now to optimize big and big table
+# Read Sales data
+sales_schema = "transacted_at string, trx_id string, retailer_id string, description string, amount double, city_id string"
+
+sales = spark.read.format("csv").schema(sales_schema).option("header", True).load("/data/input/datasets/new_sales.csv")
+
+# Read City data
+city_schema = "city_id string, city string, state string, state_abv string, country string"
+
+city = spark.read.format("csv").schema(city_schema).option("header", True).load("/data/input/datasets/cities.csv")
+
+#perform default join
+df_sales_joined = sales.join(city,on=sales.city_id==city.city_id, how="left_outer")
+
+df_sales_joined.write.format("noop").mode("overwrite").save()
+
+#after running above action, go to spark UI > job : spark performed sort merge join.
+
+#what if we perform broadcast join for above two big datasets.
+df_sales_joined = sales.join(broadcast(city),on=sales.city_id==city.city_id, how="left_outer")
+
+#go to spark UI > Executors tab : we can see the tasks with Red marks start failing due to its input size.
+
+
+
+
+#BUCKETING IN SPARK
+#internal working
+two datasets:
+we have said to create 4 buckets
+so each dataset will have 4 buckets to store its respective data.
+bucket is selected based on hash function applied on row.
+once the data is bifurcated between the buckets then the buckets with same number in both the datasets will be read by the same executor so the joining will happen efficiently without any shuffling of data.
+
+bucketing can only work when we save data as a table.
+
+# Read Sales data
+sales_schema = "transacted_at string, trx_id string, retailer_id string, description string, amount double, city_id string"
+
+sales = spark.read.format("csv").schema(sales_schema).option("header", True).load("/data/input/datasets/new_sales.csv")
+
+# Read City data
+city_schema = "city_id string, city string, state string, state_abv string, country string"
+
+city = spark.read.format("csv").schema(city_schema).option("header", True).load("/data/input/datasets/cities.csv")
+
+#Bucketing can avoid shuffle only when both tables are bucketed on the join key with the same number of buckets and Spark can leverage the metadata. Otherwise, shuffle still happens.
+
+#bucketing sales with the same joining column
+sales.write.format("csv").mode("overwrite").bucketBy(4,"city_id").option("header",True).option(path,"/data/input/datasets/sales_bucket.csv").saveAsTable("sales_table")
+
+#now after running above code, if you go to the partition path, we can see for each partition 4 buckets are created. so we have total 16 partitions then 16 * 4 = 62 total buckets.
+
+#bucketing city with the same joining column
+city.write.format("csv").mode("overwrite").bucketBy(4,"city_id").option("header",True).option(path,"/data/input/datasets/city_bucket.csv").saveAsTable("city_table")
+
+#now again after running above code, if you go to the partition path, we can see for each partition 4 buckets are created. so we have total 16 partitions then 16 * 4 = 62 total buckets.
+
+#we have created now two tables
+spark.sql("show tables in default").show()
+
+
+
+
 
 
 
