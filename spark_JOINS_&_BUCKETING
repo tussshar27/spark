@@ -1,8 +1,11 @@
 how join works in spark?
--> spark reads the data
+-> spark reads the data in partitions
+-> spark divides both the dataset randomly in its executors in the form of partitions 
+now since the data is distributed across the executors, and in order to bring similar data of two datasets in same executor, spark performs shuffling
 -> data shuffling happens between the executors
--> spark joins the data
--> spark perform write/count
+-> spark performs shuffling of any one dataset first then it shuffle the other dataset.
+-> spark joins the shuffled data
+-> spark perform write/count as per our need.
 
 types of joins:
 1. Shuffle Hash Join
@@ -18,7 +21,7 @@ so this method is reliable only if you have a smaller dataset that can be easily
 2. (Shuffle) Sort Merge Join
 steps:
 a. data will be shuffled for both datasets.
-b. sorting of key data is done
+b. sorting of key data is fine
 c. once sorting is done then it will be merged.
 
 this is reliable for joining two big datasets.
