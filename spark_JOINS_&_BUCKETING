@@ -21,7 +21,7 @@ so this method is reliable only if you have a smaller dataset that can be easily
 2. (Shuffle) Sort Merge Join
 steps:
 a. data will be shuffled for both datasets.
-b. sorting of key data is fine
+b. sorting of keys are done 
 c. once sorting is done then it will be merged.
 
 this is reliable for joining two big datasets.
