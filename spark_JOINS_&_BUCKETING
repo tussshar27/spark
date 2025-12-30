@@ -28,7 +28,7 @@ this is reliable for joining two big datasets.
 
 3. Broadcast Join
 steps:
-a. smaller dataset is broadcasted to all the executors.
+a. there is no shuffle step, smaller dataset is broadcasted to all the executors.
 b. once the dataset is present in all the executors then hashing happens which is known as broadcast hash join.
 c. the default value of smaller dataset is 10MB . and this can be increased to 8GB using spark conf (spark.sql.autoBroadcastJoinThreshold)
 
