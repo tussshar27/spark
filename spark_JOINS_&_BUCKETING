@@ -8,7 +8,7 @@ now since the data is distributed across the executors, and in order to bring si
 -> spark perform write/count as per our need.
 
 types of joins:
-1. Shuffle Hash Join
+1. Shuffle (Hash) Join
 steps:
 a. data will be shuffled for both datasets.
 b. smaller dataset will be hashed
@@ -18,7 +18,7 @@ d. join is performed.
 if you see there is no sorting and hashing is done.
 so this method is reliable only if you have a smaller dataset that can be easily fit in memory.
 
-2. (Shuffle) Sort Merge Join
+2. Shuffle (Sort Merge) Join
 steps:
 a. data will be shuffled for both datasets.
 b. sorting of keys are done 
@@ -26,7 +26,7 @@ c. once sorting is done then it will be merged.
 
 this is reliable for joining two big datasets.
 
-3. Broadcast Join
+3. Broadcast Hash Join
 steps:
 a. there is no shuffle step, smaller dataset is broadcasted to all the executors.
 b. once the dataset is present in all the executors then hashing happens which is known as broadcast hash join.
