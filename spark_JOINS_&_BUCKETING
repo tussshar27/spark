@@ -7,6 +7,15 @@ now since the data is distributed across the executors, and in order to bring si
 -> spark joins the shuffled data
 -> spark perform write/count as per our need.
 
+example:
+1. consider we have two tables: sales and city with common column city_id.
+2. we will join both tables using common city_id column.
+3. in data warehousing concept, since City table is very small table then we can consider it as Dimension table and Sales table which is large in size as Fact table.
+4. now in spark, the data gets divided into the number of available executors by shuffling of data.
+5. once the data is shuffled, spark can perform join operations.
+
+
+
 types of joins:
 1. Shuffle (Hash) Join
 steps:
