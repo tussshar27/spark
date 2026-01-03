@@ -1,1 +1,95 @@
+let's say,
+we have two workers with 8gb memory and 8cores each.
+w1            w2
+8gb memory    8gb memory
+8 CPU cores    8 CPU cores
+in total, 8 + 8 = 16 CPU cores and 8 + 8 = 16gb memory.
+
+user1 requests app1 -> 6 executors -> 2 cores and 2gb memory each (total: 6 * 2 = 12 cores and 12gb memory)
+user2 requests app2 -> 6 executors -> 1 cores and 1gb memory each (total: 6 * 1 =  6 cores and 6gb memory)
+app1 + app2 request: 
+12 + 6 = 18 cores and 12 + 6 = 18gb memory.
+but we have only 16 CPU cores and 16gb memory in total.
+Here, the required amount of resources are already captured by app1, so app2 needs to wait until app1 clears it out.
+and this type of above allocation of resources is static allocation in which we already define the amount of resources needed.
+
+Dynamic allocation automatically scales the number of executors up or down at runtime based on workload demand.
+in order to work dynamic allocation, we need to setup some spark properties.
+
+spark standalone cluster UI:
+Apache Spark 3.3.0
+Spark Master at spark://197e20b418a6:7077
+URL: spark://197e20b418a6:7077
+Alive Workers: 2
+Cores in use: 16 Total, 0 Used
+Memory in use: 13.3 GiB Total, 0.0 B Used
+Resources in use: —
+Applications: 0 Running, 9 Completed
+Drivers: 0 Running, 0 Completed
+Status: ALIVE
+Workers (2)
+
+| Worker Id                              | Address          | State | Cores      | Memory               | Resources |
+| -------------------------------------- | ---------------- | ----- | ---------- | -------------------- | --------- |
+| worker-20240101142519-172.19.0.4-42293 | 172.19.0.4:42293 | ALIVE | 8 (0 Used) | 6.7 GiB (0.0 B Used) |           |
+| worker-20240101142522-172.19.0.5-37757 | 172.19.0.5:37757 | ALIVE | 8 (0 Used) | 6.7 GiB (0.0 B Used) |           |
+
+
+NOTE:
+By default, dynamic allocation is not enabled. 
+also we need to set external shuffle service.
+
+what is External Shuffle Service?
+External Shuffle Service is a separate service running on each worker node that is responsible for serving shuffle files, even after executors are stopped or restarted or scaled up or scaled down.
+
+what is Shuffle Tracking Enabled?
+if we enable shuffle tracking, spark make sure that the shuffle data whatever are written in memory are tracked and it make sure that the executors have access to this data.
+
+External Shuffle Service keeps shuffle data alive after executors die, whereas Shuffle Tracking keeps executors alive until shuffle data is no longer needed.
+External Shuffle Service preserves shuffle data independently of executors, while Shuffle Tracking preserves executors until their shuffle data is no longer required.
+
+External Shuffle Service:
+spark.shuffle.service.enabled true
+spark.dynamicAllocation.enabled true
+
+Shuffle Tracking:
+spark.dynamicAllocation.enabled true
+spark.dynamicAllocation.shuffleTracking.enabled true
+spark.shuffle.service.enabled false
+
+code:
+# Spark Session
+from pyspark.sql import SparkSession
+
+spark = (
+    SparkSession
+        .builder
+        .appName("Dynamic Allocation")
+        .master("spark://197e20b418a6:7077")                      #spark standalone cluster
+        .config("spark.executor.cores", 2)                        #2 cores each executor
+        .config("spark.executor.memory", "512m")                  #each executor memory
+        .config("spark.dynamicAllocation.enabled", True)
+        .config("spark.dynamicAllocation.minExecutors", 0)        #min number of executors that your application can have
+        .config("spark.dynamicAllocation.maxExecutors", 5)        #max number of executors that your application can have
+        .config("spark.dynamicAllocation.initialExecutors", 1)    #as soon as spark application is created, one executor will be assigned to this particular application.
+        .config("spark.dynamicAllocation.shuffleTracking.enabled", True)      #enabling shuffle tracking 
+        .config("spark.dynamicAllocation.executorIdleTimeout", "60s")          #configuration for executor scale down
+        .config("spark.dynamicAllocation.cachedExecutorIdleTimeout", "60s")    #configuration for executor scale down
+        .getOrCreate()
+)
+
+spark
+
+
+
+
+
+
+
+
+
+
+
+
+
 
