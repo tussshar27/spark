@@ -1,3 +1,40 @@
+There are two spark UI when we use spark standalone cluster:
+1. http://localhost:4040 — Spark Application UI
+2. http://localhost:8080 — Spark Master UI
+
+| Feature           | `4040` (Application UI) | `8080` (Master UI) |
+| ----------------- | ----------------------- | ------------------ |
+| Scope             | Single Spark job        | Entire cluster     |
+| Jobs / Stages     | ✅ Yes                   | ❌ No               |
+| Tasks             | ✅ Yes                   | ❌ No               |
+| Executors         | ✅ Yes                   | Partial            |
+| Workers           | ❌ No                    | ✅ Yes              |
+| Resource overview | ❌ No                    | ✅ Yes              |
+| Lifetime          | While app runs          | While cluster runs |
+
+🧩 When you’ll see which:
+Local mode (spark-submit) → mostly 4040
+Standalone cluster → 4040 + 8080
+YARN / Kubernetes →
+Application UI via YARN/K8s
+No 8080 master UI
+
+NOTE:
+it is available in spark standalone server.
+👉 There is NO localhost:4040 in Databricks
+
+JupyterLab (8888)
+   ↓
+Spark Driver
+   ↓
+Spark Application UI (4040)
+   ↓
+Spark Master (8080)
+   ↓
+Workers / Executors
+
+
+
 
 df.explain()
 == Physical Plan ==
