@@ -17,17 +17,88 @@ example:
 
 
 types of joins:
-1. Shuffle (Hash) Join
+1. Shuffle (Hash) Join - (useful if you have one smaller dataset which can fit in memory)
 steps:
 a. data will be shuffled for both datasets.
 b. smaller dataset will be hashed
 c. hashed dataset will be matched with big dataset
 d. join is performed.
 
+
 if you see there is no sorting and hashing is done.
 so this method is reliable only if you have a smaller dataset that can be easily fit in memory.
 
-2. Shuffle (Sort Merge) Join
+Example:
+orders   → 100 GB (probe/looking side)
+customers → 2 GB (build side)
+
+both datasets are repartitioned (shuffled).
+same key goes to same partition.
+
+Partition 0 → customer_id 1–1000
+Partition 1 → customer_id 1001–2000
+Partition 2 → customer_id 2001–3000
+
+orders_p0 joins only with customers_p0
+orders_p1 joins only with customers_p1
+
+now, hash table is built per partition.
+spark reads small dataset partition and builds a hash table of it in executor memory.
+
+Executor 1:
+  Task 0:
+    HashTable(customers_p0)
+
+Executor 2:
+  Task 1:
+    HashTable(customers_p1)
+
+In probe side,
+perform hash on join key.
+lookup in that pertition's hash table
+orders_p0 record → lookup in HashTable(customers_p0)
+
+after task completion,
+task finishes, hash table is destroyed and memory is freed.
+
+Executor Memory
+┌──────────────────────┐
+│ Task 0               │
+│  HashTable (P0)      │
+├──────────────────────┤
+│ Task 1               │
+│  HashTable (P1)      │
+├──────────────────────┤
+│ Task 2               │
+│  HashTable (P2)      │
+└──────────────────────┘
+Why NOT One Global Hash Table?
+Because:
+1. Spark is distributed
+2. Executors don’t share memory
+3. Shuffled partitions are processed in parallel
+
+So Spark uses:
+“Build hash locally per task per partition.”
+
+| Aspect                | Shuffle Hash Join     | Broadcast Join    |
+| --------------------- | --------------------- | ----------------- |
+| Hash table scope      | Per partition         | Per executor      |
+| Built how many times? | Many times (per task) | Once per executor |
+| Shuffle required      | Yes                   | No                |
+| Memory pressure       | Partition-level       | Executor-level    |
+| Skew impact           | High                  | Low               |
+
+Q: If both joins use hash tables, why is broadcast faster?
+Answer:
+In shuffle hash join, hash tables are built repeatedly for each partition after shuffle, 
+whereas in broadcast join the hash table is built once per executor and reused across all tasks, avoiding shuffle and reducing computation overhead.
+
+Summary, 
+In shuffle hash join, Spark shuffles both datasets and builds a separate in-memory hash table for the small-side partition inside each task, 
+which is used to probe matching records from the large-side partition.
+
+2. Shuffle (Sort Merge) Join - (useful if we have two big datasets to join)
 steps:
 a. data will be shuffled for both datasets.
 b. sorting of keys are done 
@@ -37,11 +108,24 @@ this is reliable for joining two big datasets.
 
 3. Broadcast Hash Join
 steps:
-a. there is no shuffle step, smaller dataset is broadcasted to all the executors.
+a. there is no shuffle step, smaller dataset is always broadcasted to all the EXECUTORS.
 b. once the dataset is present in all the executors then joining happens which is a hash join that's why it is known as broadcast hash join.
 c. the default value of smaller dataset is 10MB . and this can be increased to 8GB using spark conf (spark.sql.autoBroadcastJoinThreshold)
-d. ideal for fact and dimension joins.
-e. each executor performs a local hash join
+d. if we try to broadcast bigger dataset then it will give Out Of Memory (OOM) error.
+e. ideal for fact and dimension joins.
+f. each executor performs a local hash join
+
+Summary,
+If it fits in executor memory → Broadcast Join
+If it doesn’t → Shuffle Hash Join
+If both are large → Sort Merge Join
+
+when to use shuffle hash join instead of broadcast join?
+One table is smaller but too big to broadcast. Broadcasting would cause OOM.
+
+Broadcast join avoids shuffle by sending the small table to all executors, making it the fastest option. 
+Shuffle hash join still shuffles data and builds hash tables per partition, used when the small table is not small enough to broadcast.
+
 
 example of broadcast hash join:
 from pyspark.sql.functions import broadcast
@@ -59,8 +143,8 @@ spark = (
   .appName("Optimizing Joins")
   .master("spark://hostname:port")
   .config("spark.cores.max", 16)
-  .config("spark.executor.cores", 4)
-  .config("spark.executor.memory", "512M")
+  .config("spark.executor.cores", 4)            # 4 executors with 4 cores each
+  .config("spark.executor.memory", "512M")        # 512MB per executor memory
   .getOrCreate()
 )
 
@@ -91,8 +175,7 @@ dept = spark.read.format("csv").schema(_dept_schema).option("header", True).load
 #NOTE: above reading of datasets won't create any job in spark UI because we are passing data schema while reading to spark above.
 
 # joining both datasets normally.
-
-df_joined = emp.join(dept, on=emp.department_id==dept.department_id, how="left_outer")    #we want to retain all the records from emp dataset so doing left outer join.
+df_joined = emp.join(dept, on=emp.department_id==dept.department_id, how="left_outer")    #we want to retain all the records from emp dataset b/c emp is a bigger table than dept table so doing left outer join.
 
 df_joined.write.format("noop").mode("overwrite").save()      # noop will create a job since it is an action.
 
@@ -100,24 +183,31 @@ df.explain()
 == Physical Plan ==
 *(4) SortMergeJoin [department_id#7], [department_id#16], LeftOuter                                #in physical plan, SortMerge is the joining strategy used between both datasets.
 :- *(1) Sort [department_id#7 ASC NULLS FIRST], false, 0                     #emp data             #each partition in sorted by department_id
-:  +- Exchange hashpartitioning(department_id#7, 200), ENSURE_REQUIREMENTS, [id=#70]                #200 are default suffle partitions count
-:     +- FileScan csv [first_name#0,last_name#1,job_title#2,dob#3,email#4,phone#5,salary#6,department_id#7]
+:  +- Exchange hashpartitioning(department_id#7, 200), ENSURE_REQUIREMENTS, [id=#70]                #shuffle of data, 200 are default suffle partitions count
+:     +- FileScan csv [first_name#0,last_name#1,job_title#2,dob#3,email#4,phone#5,salary#6,department_id#7]    #file has been read first, data is filtered above, then shuffling(exchange) above it is done, then sort happens above.
 :        Batched: false, DataFilters: [], Format: CSV,
 :        Location: InMemoryFileIndex(1 paths)[file:/data/input/datasets/employee_records.csv],
 :        PartitionFilters: [], PushedFilters: [], ReadSchema:
 :        struct<first_name:string,last_name:string,job_title:string,dob:string,email:string,
 :        phone:string,salary:string,department_id:int>
 +- *(3) Sort [department_id#16 ASC NULLS FIRST], false, 0                    #dept data
-   +- Exchange hashpartitioning(department_id#16, 200), ENSURE_REQUIREMENTS, [id=#82]              #200 are default suffle partitions count
+   +- Exchange hashpartitioning(department_id#16, 200), ENSURE_REQUIREMENTS, [id=#82]              #shuffle of data, 200 are default suffle partitions count
       +- *(2) Filter isnotnull(department_id#16)                                                      #spark applies filter pushdown to right side table
-         +- FileScan csv [department_id#16,department_name#17,description#18,city#19,state#20,country#21]
+         +- FileScan csv [department_id#16,department_name#17,description#18,city#19,state#20,country#21]    #file has been read first, data is filtered above, then shuffling(exchange) above it is done, then sort happens above.
             Batched: false, DataFilters: [isnotnull(department_id#16)], Format: CSV,
             Location: InMemoryFileIndex(1 paths)[file:/data/input/datasets/department_data.csv],
             PartitionFilters: [], PushedFilters: [IsNotNull(department_id)],
             ReadSchema: struct<department_id:int,department_name:string,description:string,
             city:string,state:string,country:string>
 
-exchange both datasets > sort both datasets > merge join
+FileScan both > filter > shuffle (exchange) both datasets > sort both datasets > merge join
+
+Open spark UI > SQL/Dataframe:
+to read the above explain plan in visual DAG.
+
+In spark UI > Job : we see shuffle read and shuffle write columns
+Shuffle Write is the amount of intermediate data written by a stage during repartitioning, 
+while Shuffle Read is the amount of shuffled data read by the next stage for further processing.
 
 1️⃣ SortMergeJoin (LeftOuter)
 ->
@@ -139,6 +229,8 @@ Join key is sortable
 Spark performs a Sort-Merge Left Outer Join by shuffling both datasets on department_id, sorting them within each partition, and then merging the sorted partitions. 
 This strategy is chosen because both datasets are large and cannot be broadcast.
 
+Broadcast join:
+Example:
 #now to optimize big and small tables, so we can perform a broadcast join.
 from pyspark.sql.functions import broadcast
 
@@ -213,14 +305,17 @@ df_sales_joined = sales.join(broadcast(city),on=sales.city_id==city.city_id, how
 
 
 
-#BUCKETING IN SPARK
+#BUCKETING IN SPARK - (No shuffle) SortMerge with Bucketing
 #internal working
 two datasets:
 we have said to create 4 buckets
 so each dataset will have 4 buckets to store its respective data.
-bucket is selected based on hash function applied on row.
+bucket is selected based on (murmur) hash function applied on row.
 once the data is bifurcated between the buckets then the buckets with same number in both the datasets will be read by the same executor so the joining will happen efficiently without any shuffling of data.
 
+MurmurHash — the hash function Spark uses internally for partitioning data during shuffles (joins, groupBy, aggregations).
+
+IMPORTANT:
 bucketing can only work when we save data as a table.
 
 # Read Sales data
@@ -238,6 +333,7 @@ city = spark.read.format("csv").schema(city_schema).option("header", True).load(
 #bucketing sales with the same joining column
 sales.write.format("csv").mode("overwrite").bucketBy(4,"city_id").option("header",True).option(path,"/data/input/datasets/sales_bucket.csv").saveAsTable("sales_table")
 
+since each partition's data will get divided in 4 buckets:
 #now after running above code, if you go to the partition path, we can see for each partition 4 buckets are created. so we have total 16 partitions then 16 * 4 = 62 total buckets.
 
 #bucketing city with the same joining column
@@ -247,12 +343,101 @@ city.write.format("csv").mode("overwrite").bucketBy(4,"city_id").option("header"
 
 #we have created now two tables
 spark.sql("show tables in default").show()
+output:
++-----------+------------+-----------+
+| namespace | tableName  | isTemporary |
++-----------+------------+-----------+
+| default   | city_bucket| false       |
+| default   | sales_bucket | false     |
++-----------+------------+-----------+
 
+#read sales table data
+sales_bucket = spark.read.table("sales_bucket")
 
+#read city table data
+city_bucket = spark.read.table("city_bucket")
 
+#joining both the dataframes
+df_joined_bucket = sales_bucket.join(city_bucket, on=sales_bucket.city_id=city_bucket.city_id, how="left_outer")    
 
+# Write dataset
+df_joined_bucket.write.format("noop").mode("overwrite").save()
 
+df_joined_bucket.explain()
 
+== Physical Plan ==
+*(3) SortMergeJoin [city_id#176], [city_id#183], LeftOuter
+:- *(1) Sort [city_id#176 ASC NULLS FIRST], false, 0
+:  +- *(1) Scan csv default.sales_bucket
+      [transacted_at#171,trx_id#172,retailer_id#173,description#174,
+       amount#175,city_id#176]
+      Batched: false,
+      Bucketed: true,
+      BucketSet: [city_id],
+      Format: CSV,
+      Location: InMemoryFileIndex(1 paths)[file:/data/input/datasets/sales_bucket.csv],
+      PartitionFilters: [],
+      PushedFilters: [],
+      ReadSchema: struct<transacted_at:string,trx_id:string,
+                         retailer_id:string,description:string,
+                         amount:string,city_id:string>,
+      SelectedBucketsCount: 4 out of 4
++- *(2) Sort [city_id#183 ASC NULLS FIRST], false, 0
+   +- *(2) Filter isnotnull(city_id#183)
+      +- FileScan csv default.city_bucket
+         [city_id#183,city#184,state#185,state_abv#186,country#187]
+         Batched: false,
+         Bucketed: true,
+         BucketSet: [city_id],
+         Format: CSV,
+         Location: InMemoryFileIndex(1 paths)[file:/data/input/datasets/city_bucket.csv],
+         PartitionFilters: [],
+         PushedFilters: [IsNotNull(city_id)],
+         ReadSchema: struct<city_id:string,city:string,state:string,
+                            state_abv:string,country:string>,
+         SelectedBucketsCount: 4 out of 4
+
+now go to spark UI > SQL/Dataframe:
+click on Description to see the visual explain plan DAG.
+sort and merge is happening but there is no involvement of shuffle before sort.
+
+click on Job Id to see the job.
+
+in job, we can see there is no shuffle involve. we are reading it and joining it directly.
+
+so this (No shuffle)sortmerge bucketing join took around 22 secs to perform the operation
+but the same (shuffle) sortMerge join took around 2.2mins.
+so this is how bucketing can improve your performance.
+
+Tasks (4)
+Show: 20 entries
+| Index | Task ID | Attempt | Status  | Locality Level | Executor ID | Host       | Logs           | Launch Time         | Duration | GC Time | Input Size / Records  | Spill (Memory) | Spill (Disk) | Errors |
+| ----: | ------: | ------: | ------- | -------------- | ----------- | ---------- | -------------- | ------------------- | -------- | ------- | --------------------- | -------------- | ------------ | ------ |
+|     0 |     282 |       0 | SUCCESS | PROCESS_LOCAL  | 2           | 172.19.0.5 | stdout, stderr | 2023-12-28 19:03:42 | 16 s     | 0.8 s   | 147.6 MiB / 2,026,174 | 225 MiB        | 82.4 MiB     |        |
+|     1 |     283 |       0 | SUCCESS | PROCESS_LOCAL  | 1           | 172.19.0.4 | stdout, stderr | 2023-12-28 19:03:42 | 22 s     | 0.6 s   | 199.5 MiB / 2,614,143 | 300 MiB        | 110.3 MiB    |        |
+|     2 |     284 |       0 | SUCCESS | PROCESS_LOCAL  | 3           | 172.19.0.5 | stdout, stderr | 2023-12-28 19:03:42 | 21 s     | 0.6 s   | 189.3 MiB / 2,485,699 | 313 MiB        | 108.4 MiB    |        |
+|     3 |     285 |       0 | SUCCESS | PROCESS_LOCAL  | 0           | 172.19.0.4 | stdout, stderr | 2023-12-28 19:03:42 | 20 s     | 0.7 s   | 182.5 MiB / 2,425,944 | 302 MiB        | 104.5 MiB    |        |
+
+ Input Size / Records column stores the count of records on each partition minus header and the size of partition.
+so the first row will be partition0 of both the datasets clubbed together. 
+
+Points to Note:
+Joining column different from bucket column, same bucket size
+→ Shuffle happens on both tables
+
+Joining column same, one table bucketed
+→ Shuffle happens on non-bucketed table
+
+Joining column same, different bucket size
+→ Shuffle happens on smaller-bucket side
+
+Joining column same, same bucket size
+→ No shuffle (faster join)
+
+Additional Notes:
+It is very important to choose the correct bucket column and bucket size.
+Decide the number of buckets carefully; too many buckets with insufficient data can lead to the small file problem.
+If datasets are small, you can prefer Shuffle Hash Join.
 
 
 
