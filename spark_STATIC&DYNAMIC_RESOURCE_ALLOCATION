@@ -73,12 +73,203 @@ spark = (
         .config("spark.dynamicAllocation.maxExecutors", 5)        #max number of executors that your application can have
         .config("spark.dynamicAllocation.initialExecutors", 1)    #as soon as spark application is created, one executor will be assigned to this particular application.
         .config("spark.dynamicAllocation.shuffleTracking.enabled", True)      #enabling shuffle tracking 
-        .config("spark.dynamicAllocation.executorIdleTimeout", "60s")          #configuration for executor scale down
-        .config("spark.dynamicAllocation.cachedExecutorIdleTimeout", "60s")    #configuration for executor scale down
+        .config("spark.dynamicAllocation.executorIdleTimeout", "60s")          #configuration for idle executor scale down
+        .config("spark.dynamicAllocation.cachedExecutorIdleTimeout", "60s")    #configuration for cached executor scale down
         .getOrCreate()
 )
 
 spark
+
+after running above code, go to spark UI
+we can see a Running Application
+-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+spark standalone cluster UI:
+Apache Spark 3.3.0
+Spark Master at spark://197e20b418a6:7077
+URL: spark://197e20b418a6:7077
+Alive Workers: 2
+Cores in use: 16 Total, 0 Used
+Memory in use: 13.3 GiB Total, 0.0 B Used
+Resources in use: —
+Applications: 0 Running, 9 Completed
+Drivers: 0 Running, 0 Completed
+Status: ALIVE
+Workers (2)
+
+| Worker Id                              | Address          | State | Cores      | Memory                   | Resources |
+| -------------------------------------- | ---------------- | ----- | ---------- | ------------------------ | --------- |
+| worker-20240101142519-172.19.0.4-42293 | 172.19.0.4:42293 | ALIVE | 8 (2 Used) | 6.7 GiB (512.0 MiB Used) |           |
+| worker-20240101142522-172.19.0.5-37757 | 172.19.0.5:37757 | ALIVE | 8 (0 Used) | 6.7 GiB (0.0 B Used)     |           |
+
+
+Running Applications (1)
+| Application ID          | Name               | Cores | Memory per Executor | Resources per Executor | Submitted Time      | User | State   | Duration |
+| ----------------------- | ------------------ | ----- | ------------------- | ---------------------- | ------------------- | ---- | ------- | -------- |
+| app-20240101155625-0009 | Dynamic Allocation | 2     | 512.0 MiB           | —                      | 2024/01/01 15:56:25 | root | RUNNING | 6 s      |
+
+-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+
+after clicking on above Running Application ID:
+-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+Executor Summary (1)
+| Executor ID | Worker                                 | Cores | Memory | Resources | State   | Logs            |
+| ----------- | -------------------------------------- | ----- | ------ | --------- | ------- | --------------- |
+| 0           | worker-20240101142519-172.19.0.4-42293 | 2     | 512    | —         | RUNNING | stdout · stderr |
+
+-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+Summary of above:
+Key observations (important for understanding Dynamic Allocation)
+by default spark has allocated 1 executor initially because of our configuration
+Executor is running on worker 172.19.0.4
+2 cores and 512 MiB memory assigned
+Executor limit is 1, hence no scale-up
+Application is actively RUNNING.
+
+now since we have done configuration of killing idle executor after 60seconds.
+so if you wait for 60 seconds then reload the page then you will see spark killed that running executor.
+
+-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+Executor Summary (1)
+
+(No active executors)
+
+Removed Executors (1)
+
+| Executor ID | Worker                                 | Cores | Memory | Resources | State  | Logs            |
+| ----------- | -------------------------------------- | ----- | ------ | --------- | ------ | --------------- |
+| 0           | worker-20240101142519-172.19.0.4-42293 | 2     | 512    | —         | KILLED | stdout · stderr |
+
+-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+
+running below code:
+# Read Sales data
+sales_schema = "transacted_at string, trx_id string, retailer_id string, description string, amount double, city_id string"
+
+sales = spark.read.format("csv") \
+    .schema(sales_schema) \
+    .option("header", True) \
+    .load("/data/input/new_sales.csv")
+
+
+# Read City data
+city_schema = "city_id string, city string, state string, state_abv string, country string"
+
+city = spark.read.format("csv") \
+    .schema(city_schema) \
+    .option("header", True) \
+    .load("/data/input/cities.csv")
+
+
+# Join Data
+df_sales_joined = sales.join(
+    city,
+    on=sales.city_id == city.city_id,
+    how="left_outer"
+)
+
+
+df_sales_joined.write \
+    .format("noop") \
+    .mode("overwrite") \
+    .save()
+
+
+Notes (important for understanding)
+format("noop") is used only to trigger an action (no actual data write).
+This helps test:
+Dynamic Allocation
+Executor scaling
+Shuffle behavior
+The join will cause a shuffle, so you can observe it in Spark UI (4040).
+
+
+
+after running above code, go to spark UI, we can see the job is running in spark UI.
+
+now go to spark master UI, we can see running application below:
+
+-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+Workers (2)
+| Worker Id                              | Address          | State | Cores      | Memory                    |
+| -------------------------------------- | ---------------- | ----- | ---------- | ------------------------- |
+| worker-20240101142519-172.19.0.4-42293 | 172.19.0.4:42293 | ALIVE | 8 (4 Used) | 6.7 GiB (1024.0 MiB Used) |
+| worker-20240101142522-172.19.0.5-37757 | 172.19.0.5:37757 | ALIVE | 8 (4 Used) | 6.7 GiB (1024.0 MiB Used) |
+
+Running Applications (1)
+| Application ID          | Name               | Cores | Memory per Executor | Submitted Time      | User | State   | Duration |
+| ----------------------- | ------------------ | ----- | ------------------- | ------------------- | ---- | ------- | -------- |
+| app-20240101161058-0010 | Dynamic Allocation | 8     | 512.0 MiB           | 2024/01/01 16:10:58 | root | RUNNING | 30 s     |
+
+-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+
+if we check above 8 cores are assigned and 512mb memory per executor.
+
+-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+Spark Application
+Version: Spark 3.3.0
+Application Details
+ID: app-20240101161058-0010
+Name: Dynamic Allocation
+User: root
+Cores: Unlimited (8 granted)
+Executor Limit: 3 (4 granted)
+Executor Memory: 512.0 MiB
+Executor Resources: —
+Submit Date: 2024/01/01 16:10:58
+State: RUNNING
+Application Detail UI
+
+Executor Summary (4)
+| ExecutorID | Worker                                 | Cores | Memory | Resources | State   | Logs          |
+| ---------- | -------------------------------------- | ----- | ------ | --------- | ------- | ------------- |
+| 2          | worker-20240101142519-172.19.0.4-42293 | 2     | 512    | —         | RUNNING | stdout stderr |
+| 1          | worker-20240101142522-172.19.0.5-37757 | 2     | 512    | —         | RUNNING | stdout stderr |
+| 3          | worker-20240101142522-172.19.0.5-37757 | 2     | 512    | —         | RUNNING | stdout stderr |
+| 0          | worker-20240101142519-172.19.0.4-42293 | 2     | 512    | —         | RUNNING | stdout stderr |
+
+-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+
+after waiting for 60 seconds , spark linearly remove executor one by one.
+
+-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+
+| ExecutorID | Worker                                 | Cores | Memory | Resources | State  | Logs          |
+| ---------- | -------------------------------------- | ----- | ------ | --------- | ------ | ------------- |
+| 0          | worker-20240101142519-172.19.0.4-42293 | 2     | 512    | —         | KILLED | stdout stderr |
+| 2          | worker-20240101142519-172.19.0.4-42293 | 2     | 512    | —         | KILLED | stdout stderr |
+| 1          | worker-20240101142522-172.19.0.5-37757 | 2     | 512    | —         | KILLED | stdout stderr |
+| 3          | worker-20240101142522-172.19.0.5-37757 | 2     | 512    | —         | KILLED | stdout stderr |
+| 4          | worker-20240101142519-172.19.0.4-42293 | 2     | 512    | —         | KILLED | stdout stderr |
+
+-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+
+
+IMPORTANT:
+Difference between Dynamic Allocation in Spark and Databricks Scale Up?
+In Dynamic Allocation,
+we have fixed cluster with multiple applications running on it so executors are added or removed from the existing worker nodes.
+
+But In Databricks,
+whenever we scale up and scale down, a new worker node itself is added or removed to that cluster and when worker node is added in databricks cluster then automatically executors are spinup in that particular worker node.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
