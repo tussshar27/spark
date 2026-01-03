@@ -1,0 +1,38 @@
+
+df.explain()
+== Physical Plan ==
+*(4) SortMergeJoin [department_id#7], [department_id#16], LeftOuter                                #in physical plan, SortMerge is the joining strategy used between both datasets.
+:- *(1) Sort [department_id#7 ASC NULLS FIRST], false, 0                     #emp data             #each partition in sorted by department_id
+:  +- Exchange hashpartitioning(department_id#7, 200), ENSURE_REQUIREMENTS, [id=#70]                #shuffle of data, 200 are default suffle partitions count
+:     +- FileScan csv [first_name#0,last_name#1,job_title#2,dob#3,email#4,phone#5,salary#6,department_id#7]    #file has been read first, data is filtered above, then shuffling(exchange) above it is done, then sort happens above.
+:        Batched: false, DataFilters: [], Format: CSV,
+:        Location: InMemoryFileIndex(1 paths)[file:/data/input/datasets/employee_records.csv],
+:        PartitionFilters: [], PushedFilters: [], ReadSchema:
+:        struct<first_name:string,last_name:string,job_title:string,dob:string,email:string,
+:        phone:string,salary:string,department_id:int>
++- *(3) Sort [department_id#16 ASC NULLS FIRST], false, 0                    #dept data
+   +- Exchange hashpartitioning(department_id#16, 200), ENSURE_REQUIREMENTS, [id=#82]              #shuffle of data, 200 are default suffle partitions count
+      +- *(2) Filter isnotnull(department_id#16)                                                      #spark applies filter pushdown to right side table
+         +- FileScan csv [department_id#16,department_name#17,description#18,city#19,state#20,country#21]    #file has been read first, data is filtered above, then shuffling(exchange) above it is done, then sort happens above.
+            Batched: false, DataFilters: [isnotnull(department_id#16)], Format: CSV,
+            Location: InMemoryFileIndex(1 paths)[file:/data/input/datasets/department_data.csv],
+            PartitionFilters: [], PushedFilters: [IsNotNull(department_id)],
+            ReadSchema: struct<department_id:int,department_name:string,description:string,
+            city:string,state:string,country:string>
+
+FileScan both > filter > shuffle (exchange) both datasets > sort both datasets > merge join
+
+now, to see above explain plan in visuals:
+Open spark UI > SQL/Dataframe > click on Description:
+to read the above explain plan in visual DAG.
+
+SQL / DataFrame
+Completed Queries: 2
+Completed Queries (2)
+Page: 1
+Show: 100 items in a page
+| ID | Description                             | Submitted           | Duration | Job IDs |
+| -- | --------------------------------------- | ------------------- | -------- | ------- |
+| 1  | save at NativeMethodAccessorImpl.java:0 | 2023/12/28 13:00:09 | 8 s      | [1][2]  |
+| 0  | save at NativeMethodAccessorImpl.java:0 | 2023/12/28 12:56:18 | 57 s     | [0]     |
+
