@@ -1,0 +1,180 @@
+code:
+https://github.com/subhamkharwal/pyspark-zero-to-hero/blob/master/21_aqe_spark.ipynb
+
+video:
+https://youtu.be/164OKvwW8T8?si=xxxDjBkRxxklhqHR
+
+NOTE:
+AQE is available from spark 3.0+ version
+
+Three major features of AQE:
+1. coalescing post-shuffle partition - remove unnecessary shuffle partitions
+2. converting sort-merge join to broadcast join
+3. skew join optimization - join smaller partitions and split bigger partitions
+
+Adaptive Query Execution (AQE) is an optimization technique in Spark SQL that makes use of the runtime statistics to choose the most efficient query execution plan,
+which is enabled by default since Apache Spark 3.2.0. 
+Spark SQL can turn on and off AQE by spark.sql.adaptive.enabled as an umbrella configuration.
+
+generating spark session:
+# Spark Session
+from pyspark.sql import SparkSession
+
+spark = (
+    SparkSession
+        .builder
+        .appName("AQE in Spark")
+        .master("spark://197e20b418a6:7077")
+        .config("spark.cores.max", 8)
+        .config("spark.executor.cores", 4)          #there will be 2 executors with 4 cores each.
+        .config("spark.executor.memory", "512M")
+        .getOrCreate()
+)
+
+spark
+
+
+Summary
+| Status         | RDD Blocks | Storage Memory  | Disk Used | Cores | Active Tasks | Failed Tasks | Complete Tasks | Total Tasks | Task Time (GC Time) | Input | Shuffle Read | Shuffle Write | Excluded |
+| -------------- | ---------- | --------------- | --------- | ----- | ------------ | ------------ | -------------- | ----------- | ------------------- | ----- | ------------ | ------------- | -------- |
+| **Active (3)** | 0          | 0.0 B / 621 MiB | 0.0 B     | **8** | 0            | 0            | 0              | 0           | **14 s (0.0 ms)**   | 0.0 B | 0.0 B        | 0.0 B         | 0        |
+| **Dead (0)**   | 0          | 0.0 B / 0.0 B   | 0.0 B     | 0     | 0            | 0            | 0              | 0           | 0.0 ms (0.0 ms)     | 0.0 B | 0.0 B        | 0.0 B         | 0        |
+| **Total (3)**  | 0          | 0.0 B / 621 MiB | 0.0 B     | **8** | 0            | 0            | 0              | 0           | **14 s (0.0 ms)**   | 0.0 B | 0.0 B        | 0.0 B         | 0        |
+
+Executors
+| Executor ID | Address            | Status | RDD Blocks | Storage Memory    | Disk Used | Cores | Active Tasks | Failed Tasks | Complete Tasks | Total Tasks | Task Time (GC Time) | Input | Shuffle Read | Shuffle Write | Logs            | Thread Dump |
+| ----------- | ------------------ | ------ | ---------- | ----------------- | --------- | ----- | ------------ | ------------ | -------------- | ----------- | ------------------- | ----- | ------------ | ------------- | --------------- | ----------- |
+| **0**       | 172.19.0.5:41473   | Active | 0          | 0.0 B / 93.3 MiB  | 0.0 B     | **4** | 0            | 0            | 0              | 0           | 0.0 ms (0.0 ms)     | 0.0 B | 0.0 B        | 0.0 B         | stdout / stderr | Thread Dump |
+| **driver**  | 8a95fd7f28d1:33687 | Active | 0          | 0.0 B / 434.4 MiB | 0.0 B     | 0     | 0            | 0            | 0              | 0           | **14 s (0.0 ms)**   | 0.0 B | 0.0 B        | 0.0 B         | —               | Thread Dump |
+| **1**       | 172.19.0.4:37613   | Active | 0          | 0.0 B / 93.3 MiB  | 0.0 B     | **4** | 0            | 0            | 0              | 0           | 0.0 ms (0.0 ms)     | 0.0 B | 0.0 B        | 0.0 B         | stdout / stderr | Thread Dump |
+
+
+first lets see hwat happens when we disable AQE:
+# Disable AQE and Broadcast join
+spark.conf.set("spark.sql.adaptive.enabled", False)
+spark.conf.set("spark.sql.adaptive.coalescePartitions.enabled", False)
+spark.conf.set("spark.sql.autoBroadcastJoinThreshold", -1)
+
+# Read Employee data
+_schema = "first_name string, last_name string, job_title string, dob string, email string, phone string, salary double, department_id int"
+
+emp = spark.read.format("csv") \
+    .schema(_schema) \
+    .option("header", True) \
+    .load("/data/input/employee_records_skewed.csv")
+
+# Read DEPT CSV data
+_dept_schema = "department_id int, department_name string, description string, city string, state string, country string"
+
+dept = spark.read.format("csv") \
+    .schema(_dept_schema) \
+    .option("header", True) \
+    .load("/data/input/department_data.csv")
+
+# Join Datasets
+df_joined = emp.join(
+    dept,
+    on=emp.department_id == dept.department_id,
+    how="left_outer"
+)
+
+
+# Explain Plan
+df_joined.explain()
+
+== Physical Plan ==
+*(4) SortMergeJoin [department_id#7], [department_id#16], LeftOuter
+:- *(1) Sort [department_id#7 ASC NULLS FIRST], false, 0
+:  +- Exchange hashpartitioning(department_id#7, 200), ENSURE_REQUIREMENTS, [id=#17]
+:     +- FileScan csv [first_name#0,last_name#1,job_title#2,dob#3,email#4,phone#5,salary#6,department_id#7] Batched: false, DataFilters: [], Format: CSV, Location: InMemoryFileIndex(1 paths) [file:/data/input/employee_records_skewed.csv], PartitionFilters: [], PushedFilters: [], ReadSchema: struct<first_name:string,last_name:string,job_title:string,dob:string,email:string,phone:string,salary:double,department_id:int>
++- *(3) Sort [department_id#16 ASC NULLS FIRST], false, 0
+   +- Exchange hashpartitioning(department_id#16, 200), ENSURE_REQUIREMENTS, [id=#29]
+      +- *(2) Filter isnotnull(department_id#16)
+         +- FileScan csv [department_id#16,department_name#17,description#18,city#19,state#20,country#21] Batched: false, DataFilters: [isnotnull(department_id#16)], Format: CSV, Location: InMemoryFileIndex(1 paths) [file:/data/input/department_data.csv], PartitionFilters: [], PushedFilters: [IsNotNull(department_id)], ReadSchema: struct<department_id:int,department_name:string,description:string,city:string,state:string,country:string>
+
+if we check above, since we have disabled broadcast join, spark has done sortmerge join.
+
+df_joined.write.format("noop").mode("overwrite").save()
+
+
+Aggregated Metrics by Executor
+| Executor ID | Address          | Task Time | Total Tasks | Failed Tasks | Killed Tasks | Succeeded Tasks | Excluded | Shuffle Read Size / Records | Spill (Memory) | Spill (Disk) |
+| ----------- | ---------------- | --------- | ----------- | ------------ | ------------ | --------------- | -------- | --------------------------- | -------------- | ------------ |
+| **0**       | 172.19.0.5:41473 | 32 s      | 61          | 0            | 0            | 61              | false    | **86.9 MiB / 919,801**      | **137 MiB**    | **77.2 MiB** |
+| **1**       | 172.19.0.4:37613 | 31 s      | 139         | 0            | 0            | 139             | false    | **7.6 MiB / 80,209**        | **0.0 B**      | **0.0 B**    |
+
+we can see spillage of data happened above.
+
+by default spark has created 200 shuffle partitions and we have to manually reduce spark shuffle partitions if AQE is disabled.
+but if we enable AQE then spark takes care of number of shuffle partitions required.
+now its enable AQE and see:
+
+# Coalescing post-shuffle partitions - remove un-necessary shuffle partitions
+# Skewed join optimization (balance partitions size) - join smaller partitions and split bigger partition
+
+spark.conf.set("spark.sql.adaptive.enabled", True)
+spark.conf.set("spark.sql.adaptive.coalescePartitions.enabled", True)
+
+#partition size spark will create post shuffle
+spark.conf.set("spark.sql.adaptive.advisoryPartitionSizeInBytes", "8MB")    #default value: 64MB
+#we are setting 8MB since we are using smaller cluster and task memory is less.
+
+spark.conf.set("spark.sql.adaptive.skewJoin.skewedPartitionThresholdInBytes", "10MB")    #default value: 256MB
+#we are setting skewed partition threshold to 10MB so that if any partition data exceeds 10MB then it will be considered as skewed.
+
+Completed Stages (1)
+| Stage Id | Description                             | Submitted           | Duration | Tasks (Succeeded/Total) | Input | Output | Shuffle Read | Shuffle Write |
+| -------- | --------------------------------------- | ------------------- | -------- | ----------------------- | ----- | ------ | ------------ | ------------- |
+| 12       | save at NativeMethodAccessorImpl.java:0 | 2024/01/06 09:14:55 | 0.7 s    | 17 / 17                 | —     | —      | 94.5 MiB     | —             |
+
+we can see AQE has made it only 17 shuffle partitions by coalescing/removing unnecessary shuffle partitions from 200.
+
+and there is no spillage of data
+| Index | Task ID | Attempt | Status  | Locality Level | Executor ID | Host       | Logs           | Launch Time         | Duration | GC Time | Shuffle Read Size / Records | Errors |
+| ----: | ------: | ------: | ------- | -------------- | ----------- | ---------- | -------------- | ------------------- | -------- | ------- | --------------------------- | ------ |
+|     0 |     232 |       0 | SUCCESS | NODE_LOCAL     | 0           | 172.19.0.5 | stdout, stderr | 2024-01-06 14:44:55 | 0.4 s    | 51.0 ms | 7.6 MiB / 79,910            | —      |
+|    11 |     242 |       0 | SUCCESS | NODE_LOCAL     | 0           | 172.19.0.5 | stdout, stderr | 2024-01-06 14:44:55 | 0.2 s    | 28.0 ms | 6.2 MiB / 65,439            | —      |
+|     2 |     235 |       0 | SUCCESS | NODE_LOCAL     | 1           | 172.19.0.4 | stdout, stderr | 2024-01-06 14:44:55 | 0.3 s    | 50.0 ms | 6.2 MiB / 65,261            | —      |
+|     4 |     237 |       0 | SUCCESS | NODE_LOCAL     | 1           | 172.19.0.4 | stdout, stderr | 2024-01-06 14:44:55 | 0.4 s    | 50.0 ms | 6.2 MiB / 65,221            | —      |
+|    14 |     248 |       0 | SUCCESS | NODE_LOCAL     | 1           | 172.19.0.4 | stdout, stderr | 2024-01-06 14:44:55 | 0.2 s    | 17.0 ms | 6.2 MiB / 65,163            | —      |
+|     5 |     236 |       0 | SUCCESS | NODE_LOCAL     | 0           | 172.19.0.5 | stdout, stderr | 2024-01-06 14:44:55 | 0.3 s    | 51.0 ms | 6.2 MiB / 65,132            | —      |
+|    13 |     243 |       0 | SUCCESS | NODE_LOCAL     | 0           | 172.19.0.5 | stdout, stderr | 2024-01-06 14:44:55 | 0.3 s    | 33.0 ms | 6.2 MiB / 65,080            | —      |
+|    12 |     246 |       0 | SUCCESS | NODE_LOCAL     | 1           | 172.19.0.4 | stdout, stderr | 2024-01-06 14:44:55 | 0.2 s    | 17.0 ms | 6.2 MiB / 65,063            | —      |
+|     6 |     239 |       0 | SUCCESS | NODE_LOCAL     | 1           | 172.19.0.4 | stdout, stderr | 2024-01-06 14:44:55 | 0.4 s    | 50.0 ms | 6.1 MiB / 65,089            | —      |
+
+(Remaining tasks follow the same pattern; total tasks = 17)
+
+so because of AQE, spark don't need to perform Salting technique.
+
+now enabling broadcast join:
+since earlier we disables braodcast join so spark done sort-merge join.
+
+# converting sort-merge join to broadcast join
+spark.conf.set("spark.sql.autoBroadcastJoinThreshold", "10 MB")
+
+NOTE VERY IMPORTANT:
+in AQE, there is no need of mentioning broadcast while performing join externally because AQE automatically do that.
+it checks which one is the smaller dataset and automatically apply broadcast to it.
+# Join Datasets - without specifying specific broadcast table
+
+df_joined = emp.join(dept, on=emp.department_id == dept.department_id, how="left_outer")
+
+df_joined.write.format("noop").mode("overwrite").save()
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
