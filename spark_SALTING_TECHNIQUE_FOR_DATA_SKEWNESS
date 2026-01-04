@@ -1,3 +1,9 @@
+code:
+https://github.com/subhamkharwal/pyspark-zero-to-hero/blob/master/20_skewness_and_spillage.ipynb
+
+video:
+https://youtu.be/2oaTQl1YzCw?si=qRAT6nr1bQ6e4FOq
+
 # Spark Session
 from pyspark.sql import SparkSession
 
@@ -85,22 +91,452 @@ stage0 -> dataset1
 stage1 -> dataset2
 stage3 -> joining of dataset1 and dataset2 (shuffle data - 200 partitions)
 
+Since we have disabled AQE, if we open DAG inside SQL/Dataframe tab, we can now see that spark has performed SortMerge join instead of Broadcast join.
 
-# Explain Plan
-df_joined.explain()
+Click on stage3 link, since we have deliberately kept skewed data in the employees dataset. so we will see partitions with data skewness.
+
+we can see below both the executors have Spill (memory) and Spill (disk).
+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+Aggregated Metrics by Executor
+| Executor ID | Address          | Task Time | Total Tasks | Failed Tasks | Killed Tasks | Succeeded Tasks | Excluded | Shuffle Read Size / Records | Spill (Memory) | Spill (Disk) |
+| ----------- | ---------------- | --------- | ----------- | ------------ | ------------ | --------------- | -------- | --------------------------- | -------------- | ------------ |
+| **0**       | 172.19.0.4:42561 | 22 s      | 116         | 0            | 0            | 116             | false    | **49.2 MiB / 520,914**      | **64 MiB**     | **36.1 MiB** |
+| **1**       | 172.19.0.3:41155 | 22 s      | 84          | 0            | 0            | 84              | false    | **45.3 MiB / 479,096**      | **79 MiB**     | **40.3 MiB** |
+
+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+
+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+Tasks (200) (Stage: id=2, attempt=0)
+| Index | Task ID | Attempt | Status  | Locality Level | Executor ID | Host       | Launch Time         | Duration | GC Time | Shuffle Read Size / Records | Spill (Memory) | Spill (Disk) | Errors |
+| ----- | ------- | ------- | ------- | -------------- | ----------- | ---------- | ------------------- | -------- | ------- | --------------------------- | -------------- | ------------ | ------ |
+| 122   | 17      | 0       | SUCCESS | NODE_LOCAL     | 0           | 172.19.0.4 | 2024-01-03 19:44:46 | 4 s      | 0.1 s   | **39.7 MiB / 420,475**      | **64 MiB**     | **36.1 MiB** | —      |
+| 89    | 13      | 0       | SUCCESS | NODE_LOCAL     | 1           | 172.19.0.3 | 2024-01-03 19:44:45 | 6 s      | 0.6 s   | **39.6 MiB / 419,505**      | **79 MiB**     | **40.3 MiB** | —      |
+| 174   | 18      | 0       | SUCCESS | NODE_LOCAL     | 0           | 172.19.0.4 | 2024-01-03 19:44:46 | 0.3 s    | —       | 1.9 MiB / 20,230            | —              | —            | —      |
+| 66    | 12      | 0       | SUCCESS | NODE_LOCAL     | 0           | 172.19.0.4 | 2024-01-03 19:44:45 | 0.9 s    | 54.0 ms | 1.9 MiB / 20,173            | —              | —            | —      |
+| 102   | 14      | 0       | SUCCESS | NODE_LOCAL     | 0           | 172.19.0.4 | 2024-01-03 19:44:45 | 1.0 s    | 54.0 ms | 1.9 MiB / 20,100            | —              | —            | —      |
+| 49    | 10      | 0       | SUCCESS | NODE_LOCAL     | 0           | 172.19.0.4 | 2024-01-03 19:44:45 | 1.0 s    | 54.0 ms | 1.9 MiB / 20,007            | —              | —            | —      |
+| 107   | 16      | 0       | SUCCESS | NODE_LOCAL     | 0           | 172.19.0.4 | 2024-01-03 19:44:45 | 1.0 s    | 54.0 ms | 1.9 MiB / 19,929            | —              | —            | —      |
+| 43    | 9       | 0       | SUCCESS | NODE_LOCAL     | 1           | 172.19.0.3 | 2024-01-03 19:44:45 | 1 s      | 37.0 ms | 1.9 MiB / 19,900            | —              | —            | —      |
+| 103   | 15      | 0       | SUCCESS | NODE_LOCAL     | 1           | 172.19.0.3 | 2024-01-03 19:44:45 | 1 s      | 37.0 ms | 1.9 MiB / 19,861            | —              | —            | —      |
+| 51    | 11      | 0       | SUCCESS | NODE_LOCAL     | 1           | 172.19.0.3 | 2024-01-03 19:44:45 | 1 s      | 37.0 ms | 1.9 MiB / 19,830            | —              | —            | —      |
+| 199   | 208     | 0       | SUCCESS | PROCESS_LOCAL  | 0           | 172.19.0.4 | 2024-01-03 19:44:50 | 16.0 ms  | —       | —                           | —              | —            |        |
+| 107   | 16      | 0       | SUCCESS | NODE_LOCAL     | 0           | 172.19.0.4 | 2024-01-03 19:44:45 | 1.0 s    | 54.0 ms | 1.9 MiB / 19,929            |
+| 43    | 9       | 0       | SUCCESS | NODE_LOCAL     | 1           | 172.19.0.3 | 2024-01-03 19:44:45 | 1 s      | 37.0 ms | 1.9 MiB / 19,900            |
+| 103   | 15      | 0       | SUCCESS | NODE_LOCAL     | 1           | 172.19.0.3 | 2024-01-03 19:44:45 | 1 s      | 37.0 ms | 1.9 MiB / 19,861            |
+| 51    | 11      | 0       | SUCCESS | NODE_LOCAL     | 1           | 172.19.0.3 | 2024-01-03 19:44:45 | 1 s      | 37.0 ms | 1.9 MiB / 19,830            |
+| 199   | 208     | 0       | SUCCESS | PROCESS_LOCAL  | 0           | 172.19.0.4 | 2024-01-03 19:44:50 | 16.0 ms  | —       | —                           |
+| 198   | 207     | 0       | SUCCESS | PROCESS_LOCAL  | 0           | 172.19.0.4 | 2024-01-03 19:44:50 | 15.0 ms  | —       | —                           |
+| 197   | 206     | 0       | SUCCESS | PROCESS_LOCAL  | 1           | 172.19.0.3 | 2024-01-03 19:44:50 | 12.0 ms  | —       | —                           |
+| 196   | 205     | 0       | SUCCESS | PROCESS_LOCAL  | 0           | 172.19.0.4 | 2024-01-03 19:44:50 | 20.0 ms  | —       | —                           |
+| 195   | 204     | 0       | SUCCESS | PROCESS_LOCAL  | 0           | 172.19.0.4 | 2024-01-03 19:44:50 | 14.0 ms  | —       | —                           |
+| 194   | 203     | 0       | SUCCESS | PROCESS_LOCAL  | 0           | 172.19.0.4 | 2024-01-03 19:44:50 | 47.0 ms  | —       | —                           |
+| 193   | 202     | 0       | SUCCESS | PROCESS_LOCAL  | 0           | 172.19.0.4 | 2024-01-03 19:44:50 | 46.0 ms  | —       | —                           |
+| 192   | 201     | 0       | SUCCESS | PROCESS_LOCAL  | 0           | 172.19.0.4 | 2024-01-03 19:44:50 | 22.0 ms  | —       | —                           |
+
+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+
+above we can see that not all 200 shuffle partitions are utilized, only few of them are used.
+so we have to fix that.
+
+another thing, if we see above two of the tasks have data spillage other tasks have processed less amount of data.
+
+since in our joining condition, department_id was used. 2 of the IDs had more data because of it data skewness happened which resulted in spillage of data.
+
+we can see two types of spillage:
+spillage memory and spillage disk.
+
+spill memory:
+deserialized data which will be spilled to disk.
+
+spill disk:
+deserialized data which comes from spill memory converted and stored as serialized data here. 
+
+for spillage, now spark has to read the data again from disk, perform I/O operations then perform job on that particular data which eventually impacts the performance.
+so it is always adviced to fix the data skewness.
+
+How to identify data skewness?
+for that we need to know the skewed partitions and its count of data.
+
+from pyspark.sql.functions import spark_partition_id, count, lit
+partition_df = df1.withColumn('partition_num', spark_partition_id()).groupBy('partition_num').agg(count(lit(1))).alias('count')
+partition_df.show()
+
+output:
++-------------+--------+
+|partition_num|count   |
++-------------+--------+
+|103          |19860   |
+|122          |420474  |
+|43           |19899   |
+|107          |19928   |
+|49           |20006   |
+|51           |19829   |
+|102          |20099   |
+|66           |20172   |
+|174          |20229   |
+|89           |419504  |
++-------------+--------+
+
+here we can see that the partition number 122 and 89 have so much number of count which can also be seen in above earlier task output.
+and the count of records from above earlier output is also matching with above output.
+one extra count can be seen in 420475 and 419505 in above previous output because one record is from department dataset and the rest are from employee dataset.
+also, only 10 partitions as shown in above output have data and the rest 190 partitions don't have data. 
+so we need to configure our shuffle partitions properly.
 
 
+now we will check what are the department ids which are creating data skewness.
+
+emp.groupBy('department_id').agg(count(lit(1))).alias('count').show()
+output:
++-------------+--------+
+|department_id|count(1)|
++-------------+--------+
+|1            |19899   |
+|6            |20006   |
+|3            |19829   |
+|5            |20172   |
+|9            |419504  |
+|4            |20099   |
+|8            |19860   |
+|12           |19928   |
+|10           |420474  |
+|2            |20229   |
++-------------+--------+
+
+department id 9 and 10 are the ones which are creating data skewness.
+
+so now we understand these two department ids has huge significant amount of volumes compored to other department ids, which is been read by two of the partitions, which is been processed by two tasks, which is not able to fit all of the data in memory that is why it is spilling the data to disk.
+
+how to fix data skewness?
+if we do repartition of data thn again the skewed data will come to the same department id.
+
+other way is to breakdown this skewed data in such a way that the data is distributed evenly among all the department ids. here comes the technique called salting.
+
+by fixing this skewness, we will also fix the duration of our job.
+
+salting technique involves adding salt to the joining column.
+
+salting working:
+lets assume we have data as below,
+
+EMP -
+dept_id - salt:
+1 - 1
+1 - 0
+1 - 1
+2 - 0
+3 - 1
+3 - 1
+3 - 0
+3 - 0
+3 - 0
+
+now above 3 deptId is divided in two partitions based on salt 0 and 1.
+
+DEPT - since there are two salt value 0,1 and here we have 3 records so 3 * 2 = 6 records
+dept_id - salt:
+1 - 0
+2 - 0
+3 - 0
+
+1 - 1
+2 - 1
+3 - 1
+
+now join above dept dataset's dept_id - salt pair with emp dataset dept_id - salt pair.
+
+before performing salt in code, lets set shuffle partitions to a lesser number.
+spark.conf.set('spark.sql.shuffle.partitions',16)
+
+now there are two places where we need salt, emp and dept datasets.
+
+import random
+from pysaprk.sql.functions import udf
+salt_df = spark.range(0,16)            #16 given here since we have made shuffle partitions to 16.
+salt_df.show()
+output:
+id
+0
+1
+2
+3
+4
+5
+6
+7
+8
+9
+10
+11
+12
+13
+14
+15
+
+we will use above 16 keys to cross join with dept.
+
+now writing UDF to randomly add salt to emp dataset.
+
+#UDF to return a random number and add to Employee as salt
+@udf
+def salt_udf():
+    return random.randint(0,16)
 
 
+now we have prepared our salt. now we will create salted employee and concat it with our UDF.
+from pyspark.sql.functions import lit, concat
+salted_emp = emp.withColumn('salted_dept_id', concat('department_id',lit('_'), salt_udf()))
+salted_emp.show()
+
+output:
++----------+---------+------------------------+----------+--------------------+---------------+---------+-------------+--------------+
+|first_name|last_name|job_title               |dob       |email               |phone          |salary   |department_id|salted_dept_id|
++----------+---------+------------------------+----------+--------------------+---------------+---------+-------------+--------------+
+|Samantha  |Brown    |Diagnostic radiog...    |1966-06-11|jwatson@example.com |(428)806-5154  |439679.0 |3            |3_15          |
+|Justin    |Castaneda|Human resources o...    |1996-11-11|sdavis@example.org  |001-581-642-9621|97388.0 |4            |4_0           |
+|Carl      |Peterson |Proofreader            |1984-11-23|andrew20@example.net|241-871-9102x3835|287728.0|1            |1_9           |
+|Catherine |Lane     |Location manager       |1966-06-21|elizabethalexande...|470.866.4415x0739|174151.0|3            |3_9           |
+|Aaron     |Delgado  |Teacher, secondary     |1972-10-11|uwilliams@example...|384.336.5759x4831|209013.0|8            |8_5           |
+|Michelle  |Hill     |Customer service ...    |1984-01-15|antoniojoseph@exa...|368.485.0685x793|764126.0|8            |8_10          |
+|Kristina  |Martin   |IT consultant          |1964-02-23|autumn05@example.com|(625)327-0615  |563768.0   |1            |1_8           |
+|Carol     |Nichols  |Phytotherapist         |1969-02-14|crawfordsarah@exa...|422-490-1069x38089|156689.0|10           |10_6          |
+|Peter     |Hill     |Cytogeneticist         |1964-09-23|xholt@example.org   |935.573.8160  |957436.0    |5            |5_1           |
+|Benjamin  |Lopez    |Agricultural engi...   |1966-01-20|ryan46@example.org  |+1-256-376-8069x339|891725.0|1            |1_11          |
+|Susan     |Savage   |Optician, dispensing   |1996-07-27|taylorjoshua@exam...|+1-393-821-5515x816|198396.0|6            |6_8           |
+|Robert    |Cox      |Occupational ther...   |1993-06-27|anthony00@example...|8008487748    |907659.0     |3            |3_1           |
+|Evan      |Terry    |Local government ...   |1982-01-03|sdrodriguez@exam...|220-913-4625x69419|593419.0  |5            |5_12          |
+|Justin    |Santiago |Make                  |1965-03-20|bridge@example.org  |801-317-7926 |815251.0       |7            |7_8           |
+|Rose      |Gregory  |Barrister              |1974-10-31|samuel27@example.net|923-304-9438 |673811.0       |2            |2_4           |
+|Nicholas  |Short    |Charity fundraiser     |1998-10-03|brian12@example.com|855-973-7301 |538901.0        |4            |4_0           |
+|John      |Hanson   |Lecturer, higher ...   |2001-04-12|zweiss@example.com |(453)740-2558|247223.0        |7            |7_1           |
+|Bryan     |Turner   |Public relations ...   |1984-01-30|ssmith@example.com |426.547.0413x2021|286799.0    |6            |6_6           |
+|Tonya     |Schultz  |Contracting civil...   |1982-05-07|doughlas54@example...|578-916-7661|664105.0       |4            |4_14          |
+|Patricia  |Anderson |Set designer           |1974-09-22|joshua92@example.net|001-765-729-3973x...|1439446.0|2           |2_1           |
++----------+---------+------------------------+----------+--------------------+---------------+---------+-------------+--------------+
+only showing top 20 rows
+
+now we will use above newly created salted_dept_id for join.
+
+salted_dept = dept.join(salt_df, how="cross").withColumn('salted_dept_id', concat('department_id',lit('_'), 'id'))    #id column is from salt_df
+salted_dept.show()
+
+output:
++-------------+--------------------+------------------------+------------+-----+-------------------+
+|department_id|department_name     |description             |city        |state|country            |id|salted_dept_id|
++-------------+--------------------+------------------------+------------+-----+-------------------+
+|1            |Bryan-James          |Optimized disinte...    |Melissaburgh|FM   |Trinidad and Tobago|0 |1_0|
+|1            |Bryan-James          |Optimized disinte...    |Melissaburgh|FM   |Trinidad and Tobago|1 |1_1|
+|2            |Smith, Craig and ... |Digitized empower...    |Morrisside  |DE   |Sri Lanka          |0 |2_0|
+|2            |Smith, Craig and ... |Digitized empower...    |Morrisside  |DE   |Sri Lanka          |1 |2_1|
+|3            |Pittman, Hess and... |Multi-channeled c...    |North David |SC   |Turkmenistan       |0 |3_0|
+|3            |Pittman, Hess and... |Multi-channeled c...    |North David |SC   |Turkmenistan       |1 |3_1|
+|4            |Smith, Snyder and... |Reactive neutral ...    |Lake Jennifer|TX  |Madagascar         |0 |4_0|
+|4            |Smith, Snyder and... |Reactive neutral ...    |Lake Jennifer|TX  |Madagascar         |1 |4_1|
+|5            |Hardin Inc           |Re-contextualized...    |Hayestown  |WA   |Fiji               |0 |5_0|
+|5            |Hardin Inc           |Re-contextualized...    |Hayestown  |WA   |Fiji               |1 |5_1|
+|6            |Sanders LLC          |Innovative multim...    |Phanchester|TN   |Micronesia         |0 |6_0|
+|6            |Sanders LLC          |Innovative multim...    |Phanchester|TN   |Micronesia         |1 |6_1|
+|7            |Ward-Gordon          |Progressive logis...    |Lake Jeremiahborough|WY|Belgium       |0 |7_0|
+|7            |Ward-Gordon          |Progressive logis...    |Lake Jeremiahborough|WY|Belgium       |1 |7_1|
+|8            |Parker PLC           |Assimilated multi...    |Barnettside|AL   |Marshall Islands   |0 |8_0|
+|8            |Parker PLC           |Assimilated multi...    |Barnettside|AL   |Marshall Islands   |1 |8_1|
+|9            |Mcmahon, Terrell ... |De-engineered hig...    |Marychester|MN   |Italy              |0 |9_0|
+|9            |Mcmahon, Terrell ... |De-engineered hig...    |Marychester|MN   |Italy              |1 |9_1|
+|10           |Delgado-Keller       |User-centric regi...    |Lake Ashley|MD   |Qatar              |0 |10_0|
+|10           |Delgado-Keller       |User-centric regi...    |Lake Ashley|MD   |Qatar              |1 |10_1|
++-------------+--------------------+------------------------+------------+-----+-------------------+
+
+checking only for department_id = 1 below,
+
+salted_dept.where("department_id = 1").show()
++-------------+--------------------+------------------------+------------+-----+-------------------+---+--------------+
+|department_id|department_name     |description             |city        |state|country            |id |salted_dept_id|
++-------------+--------------------+------------------------+------------+-----+-------------------+---+--------------+
+|1            |Bryan-James          |Optimized disinte...    |Melissaburgh|FM   |Trinidad and Tobago|0  |1_0|
+|1            |Bryan-James          |Optimized disinte...    |Melissaburgh|FM   |Trinidad and Tobago|1  |1_1|
+|1            |Bryan-James          |Optimized disinte...    |Melissaburgh|FM   |Trinidad and Tobago|2  |1_2|
+|1            |Bryan-James          |Optimized disinte...    |Melissaburgh|FM   |Trinidad and Tobago|3  |1_3|
+|1            |Bryan-James          |Optimized disinte...    |Melissaburgh|FM   |Trinidad and Tobago|4  |1_4|
+|1            |Bryan-James          |Optimized disinte...    |Melissaburgh|FM   |Trinidad and Tobago|5  |1_5|
+|1            |Bryan-James          |Optimized disinte...    |Melissaburgh|FM   |Trinidad and Tobago|6  |1_6|
+|1            |Bryan-James          |Optimized disinte...    |Melissaburgh|FM   |Trinidad and Tobago|7  |1_7|
+|1            |Bryan-James          |Optimized disinte...    |Melissaburgh|FM   |Trinidad and Tobago|8  |1_8|
+|1            |Bryan-James          |Optimized disinte...    |Melissaburgh|FM   |Trinidad and Tobago|9  |1_9|
+|1            |Bryan-James          |Optimized disinte...    |Melissaburgh|FM   |Trinidad and Tobago|10 |1_10|
+|1            |Bryan-James          |Optimized disinte...    |Melissaburgh|FM   |Trinidad and Tobago|11 |1_11|
+|1            |Bryan-James          |Optimized disinte...    |Melissaburgh|FM   |Trinidad and Tobago|12 |1_12|
+|1            |Bryan-James          |Optimized disinte...    |Melissaburgh|FM   |Trinidad and Tobago|13 |1_13|
+|1            |Bryan-James          |Optimized disinte...    |Melissaburgh|FM   |Trinidad and Tobago|14 |1_14|
+|1            |Bryan-James          |Optimized disinte...    |Melissaburgh|FM   |Trinidad and Tobago|15 |1_15|
++-------------+--------------------+------------------------+------------+-----+-------------------+---+--------------+
 
 
+now join both the salted dataframes
+salted_joined_df = salted_emp.join(salted_dept, on=salted_emp.salted_dept_id==salted_dept.salted_dept_id, how="left_outer")
+
+now check the partition details to understand distribution
+from pyspark.sql.functions import spark_partition_id, count
+part_df = salted_joined_df.withColumn('partition_num',spark_partition_id()).groupBy('partition_num').agg(count(lit(1)).alias('count'))
+part_df.show()
+
+output:
++-------------+--------+
+|partition_num|count   |
++-------------+--------+
+|12           |30385   |
+|5            |108424  |
+|10           |35001   |
+|1            |30517   |
+|3            |11840   |
+|2            |63609   |
+|13           |14220   |
+|14           |9468    |
+|9            |133966  |
+|6            |60135   |
+|7            |112299  |
+|11           |136782  |
+|15           |56564   |
+|4            |79251   |
+|0            |35487   |
+|8            |82052   |
++-------------+--------+
+
+from above, data is distributed properly. we can see some of the data skewness but it is way lot better than earlier.
+
+lets run action to perform join.
+salted_joined_df.write.format('noop').mode('overwrite').save()
+
+now go to spark UI > SQL/DataFrame tab > open Job ID
+
+Completed Stages (3)
+| Stage Id | Description                             | Submitted           | Duration | Tasks Succeeded / Total | Input        | Output | Shuffle Read  | Shuffle Write |
+| -------- | --------------------------------------- | ------------------- | -------- | ----------------------- | ------------ | ------ | ------------- | ------------- |
+| **58**   | save at NativeMethodAccessorImpl.java:0 | 2024/01/03 14:49:04 | 6 s      | **16 / 16**             | —            | —      | **102.7 MiB** | —             |
+| **57**   | save at NativeMethodAccessorImpl.java:0 | 2024/01/03 14:48:52 | 5 s      | **8 / 8**               | **7.0 KiB**  | —      | —             | **27.3 KiB**  |
+| **56**   | save at NativeMethodAccessorImpl.java:0 | 2024/01/03 14:48:52 | 12 s     | **8 / 8**               | **93.3 MiB** | —      | —             | **102.6 MiB** |
 
 
+now we can clearly see above, there are 16 suffle partitions instead of 200.
+
+lets expand shuffle stage,
+
+Aggregated Metrics by Executor
+| Executor ID | Address          | Time | Succeeded Tasks | Failed Tasks | Killed Tasks | Total Tasks | Excluded | Shuffle Read Size / Records | Spill (Memory) | Spill (Disk) |
+| ----------- | ---------------- | ---- | --------------- | ------------ | ------------ | ----------- | -------- | --------------------------- | -------------- | ------------ |
+| **0**       | 172.19.0.4:42561 | 22 s | 7               | 0            | 0            | 7           | false    | **50.7 MiB / 493,035**      | **51 MiB**     | **26.3 MiB** |
+| **1**       | 172.19.0.3:41155 | 23 s | 9               | 0            | 0            | 9           | false    | **51.9 MiB / 507,125**      | **18 MiB**     | **9.7 MiB**  |
 
 
+Tasks (16)
+| Index | Task ID | Attempt | Status  | Locality Level | Executor ID | Host       | Launch Time         | Duration | GC Time | Shuffle Read Size / Records | Spill (Memory) | Spill (Disk) | Errors |
+| ----- | ------- | ------- | ------- | -------------- | ----------- | ---------- | ------------------- | -------- | ------- | --------------------------- | -------------- | ------------ | ------ |
+| 11    | 936     | 0       | SUCCESS | NODE_LOCAL     | 1           | 172.19.0.3 | 2024-01-03 20:19:08 | 2 s      | 88.0 ms | **14.1 MiB / 136,180**      | **18 MiB**     | **9.7 MiB**  | —      |
+| 9     | 934     | 0       | SUCCESS | NODE_LOCAL     | 0           | 172.19.0.4 | 2024-01-03 20:19:06 | 4 s      | 0.3 s   | **13.8 MiB / 134,228**      | **17 MiB**     | **8.8 MiB**  | —      |
+| 7     | 932     | 0       | SUCCESS | NODE_LOCAL     | 0           | 172.19.0.4 | 2024-01-03 20:19:04 | 6 s      | 0.3 s   | **11.5 MiB / 111,448**      | **17 MiB**     | **8.8 MiB**  | —      |
+| 5     | 930     | 0       | SUCCESS | NODE_LOCAL     | 0           | 172.19.0.4 | 2024-01-03 20:19:04 | 6 s      | 0.3 s   | **11.1 MiB / 108,134**      | **17 MiB**     | **8.8 MiB**  | —      |
+| 8     | 933     | 0       | SUCCESS | NODE_LOCAL     | 0           | 172.19.0.4 | 2024-01-03 20:19:05 | 2 s      | 93.0 ms | **8.5 MiB / 82,571**        | —              | —            | —      |
+| 4     | 929     | 0       | SUCCESS | NODE_LOCAL     | 1           | 172.19.0.3 | 2024-01-03 20:19:04 | 4 s      | 0.1 s   | **8.2 MiB / 80,349**        | —              | —            | —      |
 
 
+we have reduce the spillage size but still we have spillage because we have a lot of data. so lets make shuffle partitions to 32 instead of 16.
 
+
+# Set shuffle partitions to a lesser number - 32
+
+spark.conf.set("spark.sql.shuffle.partitions", 32)
+
+# Let prepare the salt
+import random
+from pyspark.sql.functions import udf
+
+# UDF to return a random number every time and add to Employee as salt
+@udf
+def salt_udf():
+    return random.randint(0, 32)
+
+# Salt Data Frame to add to department
+salt_df = spark.range(0, 32)
+salt_df.show()
+
+# Salted Employee
+from pyspark.sql.functions import lit, concat
+
+salted_emp = emp.withColumn("salted_dept_id", concat("department_id", lit("_"), salt_udf()))
+
+salted_emp.show()   
+
+# Salted Department
+
+salted_dept = dept.join(salt_df, how="cross").withColumn("salted_dept_id", concat("department_id", lit("_"), "id"))
+
+salted_dept.where("department_id = 9").show()
+
+# Lets make the salted join now
+salted_joined_df = salted_emp.join(salted_dept, on=salted_emp.salted_dept_id==salted_dept.salted_dept_id, how="left_outer")
+
+salted_joined_df.write.format("noop").mode("overwrite").save()
+
+# Check the partition details to understand distribution
+from pyspark.sql.functions import spark_partition_id, count
+
+part_df = salted_joined_df.withColumn("partition_num", spark_partition_id()).groupBy("partition_num").agg(count(lit(1)).alias("count"))
+
+part_df.show()
+
++-------------+-----+
+|partition_num|count|
++-------------+-----+
+|           18|30975|
+|           12|28636|
+|           10|17942|
+|           27|58641|
+|            1|28039|
+|            3|31642|
+|           20|29552|
+|           29| 4860|
+|           13|20105|
+|           14|18831|
+|           23|81155|
+|            6|18818|
+|            9|55094|
+|           11|44418|
+|           26| 3006|
+|            7|30275|
+|           30| 4220|
+|           28|16504|
+|            0|30887|
+|            8|30997|
++-------------+-----+
+only showing top 20 rows
+
+now the volumne is spread much more evenly.
+
+go to spark UI > SQL/DataFrame tab
+
+Completed Stages (3)
+| Stage Id | Description                             | Submitted           | Duration | Tasks Succeeded / Total | Input        | Output | Shuffle Read  | Shuffle Write |
+| -------- | --------------------------------------- | ------------------- | -------- | ----------------------- | ------------ | ------ | ------------- | ------------- |
+| **99**   | save at NativeMethodAccessorImpl.java:0 | 2024/01/03 14:55:16 | 3 s      | **32 / 32**             | —            | —      | **102.3 MiB** | —             |
+| **98**   | save at NativeMethodAccessorImpl.java:0 | 2024/01/03 14:55:01 | 15 s     | **8 / 8**               | **93.3 MiB** | —      | —             | **102.3 MiB** |
+| **97**   | save at NativeMethodAccessorImpl.java:0 | 2024/01/03 14:55:01 | 0.2 s    | **8 / 8**               | **7.0 KiB**  | —      | —             | **53.9 KiB**  |
+
+Tasks (32)
+| Index | Task ID | Attempt | Status  | Locality Level | Executor ID | Host       | Launch Time         | Duration | GC Time | Shuffle Read Size / Records | Errors |
+| ----- | ------- | ------- | ------- | -------------- | ----------- | ---------- | ------------------- | -------- | ------- | --------------------------- | ------ |
+| 23    | 1154    | 0       | SUCCESS | NODE_LOCAL     | 1           | 172.19.0.3 | 2024-01-03 20:25:18 | 1 s      | 32.0 ms | **8.4 MiB / 81,911**        | —      |
+| 25    | 1156    | 0       | SUCCESS | NODE_LOCAL     | 0           | 172.19.0.4 | 2024-01-03 20:25:19 | 0.6 s    | 19.0 ms | **6.9 MiB / 67,533**        | —      |
+| 4     | 1135    | 0       | SUCCESS | NODE_LOCAL     | 1           | 172.19.0.3 | 2024-01-03 20:25:16 | 2 s      | 79.0 ms | **6.7 MiB / 65,987**        | —      |
+| 27    | 1158    | 0       | SUCCESS | NODE_LOCAL     | 0           | 172.19.0.4 | 2024-01-03 20:25:19 | 0.6 s    | 31.0 ms | **6.1 MiB / 58,292**        | —      |
+| 9     | 1140    | 0       | SUCCESS | NODE_LOCAL     | 0           | 172.19.0.4 | 2024-01-03 20:25:17 | 1.0 s    | 78.0 ms | **5.6 MiB / 54,946**        | —      |
+| 11    | 1142    | 0       | SUCCESS | NODE_LOCAL     | 1           | 172.19.0.3 | 2024-01-03 20:25:17 | 2 s      | 79.0 ms | **4.5 MiB / 44,203**        | —      |
+| 31    | 1162    | 0       | SUCCESS | NODE_LOCAL     | 0           | 172.19.0.4 | 2024-01-03 20:25:19 | 0.4 s    | 12.0 ms | **4.4 MiB / 43,236**        | —      |
+| 5     | 1136    | 0       | SUCCESS | NODE_LOCAL     | 0           | 172.19.0.4 | 2024-01-03 20:25:16 | 0.7 s    | 56.0 ms | **4.4 MiB / 43,518**        | —      |
+
+(Only the rows visible in the screenshot are listed; total tasks in stage = 32)
+
+so we can see now there is no data spillage in disk and the data is more evenly distributed now.
+
+and this is how we optimize code in producgtion scenario by doing trial and error.
 
 
 
