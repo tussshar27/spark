@@ -1,0 +1,111 @@
+# Spark Session
+from pyspark.sql import SparkSession
+
+spark = (
+    SparkSession
+        .builder
+        .appName("Optimizing Skewness and Spillage")
+        .master("spark://197e20b418a6:7077")
+        .config("spark.cores.max", 8)                  #max executors
+        .config("spark.executor.cores", 4)            #so we can have two executors with 4 cores each.
+        .config("spark.executor.memory", "512M")
+        .getOrCreate()
+)
+
+spark
+
+
+after running above command, go to spark UI > Executor tab:
+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+
+Summary
+|                | RDD Blocks | Storage Memory  | Disk Used | Cores | Active Tasks | Failed Tasks | Complete Tasks | Total Tasks | Task Time (GC Time) | Input | Shuffle Read | Shuffle Write | Excluded |
+| -------------- | ---------- | --------------- | --------- | ----- | ------------ | ------------ | -------------- | ----------- | ------------------- | ----- | ------------ | ------------- | -------- |
+| **Active (3)** | 0          | 0.0 B / 621 MiB | 0.0 B     | 8     | 0            | 0            | 0              | 0           | 13 s (0.1 s)        | 0.0 B | 0.0 B        | 0.0 B         | 0        |
+| **Dead (0)**   | 0          | 0.0 B / 0.0 B   | 0.0 B     | 0     | 0            | 0            | 0              | 0           | 0.0 ms (0.0 ms)     | 0.0 B | 0.0 B        | 0.0 B         | 0        |
+| **Total (3)**  | 0          | 0.0 B / 621 MiB | 0.0 B     | 8     | 0            | 0            | 0              | 0           | 13 s (0.1 s)        | 0.0 B | 0.0 B        | 0.0 B         | 0        |
+
+Executors
+| Executor ID | Address            | Status | RDD Blocks | Storage Memory    | Disk Used | Cores | Active Tasks | Failed Tasks | Complete Tasks | Total Tasks | Task Time (GC Time) | Input | Shuffle Read | Shuffle Write | Logs           | Thread Dump |
+| ----------- | ------------------ | ------ | ---------- | ----------------- | --------- | ----- | ------------ | ------------ | -------------- | ----------- | ------------------- | ----- | ------------ | ------------- | -------------- | ----------- |
+| **0**       | 172.19.0.4:42561   | Active | 0          | 0.0 B / 93.3 MiB  | 0.0 B     | 4     | 0            | 0            | 0              | 0           | 0.0 ms (0.0 ms)     | 0.0 B | 0.0 B        | 0.0 B         | stdout, stderr | Thread Dump |
+| **driver**  | 8a95fd7f28d1:40063 | Active | 0          | 0.0 B / 434.4 MiB | 0.0 B     | 0     | 0            | 0            | 0              | 0           | 13 s (0.1 s)        | 0.0 B | 0.0 B        | 0.0 B         | —              | Thread Dump |
+| **1**       | 172.19.0.3:41155   | Active | 0          | 0.0 B / 93.3 MiB  | 0.0 B     | 4     | 0            | 0            | 0              | 0           | 0.0 ms (0.0 ms)     | 0.0 B | 0.0 B        | 0.0 B         | stdout, stderr | Thread Dump |
+
+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+we can see above in Executors, executor0 -> 4 cores and executor1 -> 4 cores
+
+
+disabling AQE:
+# Disable AQE and Broadcast join
+spark.conf.set("spark.sql.adaptive.enabled", False)
+spark.conf.set("spark.sql.adaptive.coalescePartitions.enabled", False)
+spark.conf.set("spark.sql.autoBroadcastJoinThreshold", -1)
+
+
+now running below code:
+# Read Employee data
+_schema = "first_name string, last_name string, job_title string, dob string, email string, phone string, salary double, department_id int"
+
+emp = spark.read.format("csv") \
+    .schema(_schema) \
+    .option("header", True) \
+    .load("/data/input/employee_records_skewed.csv")
+
+
+# Read DEPT CSV data
+_dept_schema = "department_id int, department_name string, description string, city string, state string, country string"
+
+dept = spark.read.format("csv") \
+    .schema(_dept_schema) \
+    .option("header", True) \
+    .load("/data/input/department_data.csv")
+
+
+# Join Datasets
+df_joined = emp.join(
+    dept,
+    on=emp.department_id == dept.department_id,
+    how="left_outer"
+)
+
+df_joined.write.format("noop").mode("overwrite").save()              #this action will trigger the above join
+
+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+Completed Stages (3)
+| Stage Id | Description                             | Submitted           | Duration | Tasks Succeeded / Total | Input        | Output | Shuffle Read | Shuffle Write |
+| -------- | --------------------------------------- | ------------------- | -------- | ----------------------- | ------------ | ------ | ------------ | ------------- |
+| **2**    | save at NativeMethodAccessorImpl.java:0 | 2024/01/03 14:14:45 | 6 s      | 200 / 200               | —            | —      | **94.5 MiB** | —             |
+| **1**    | save at NativeMethodAccessorImpl.java:0 | 2024/01/03 14:14:41 | 0.4 s    | 1 / 1                   | **900.0 B**  | —      | —            | **1866.0 B**  |
+| **0**    | save at NativeMethodAccessorImpl.java:0 | 2024/01/03 14:14:41 | 4 s      | 8 / 8                   | **93.9 MiB** | —      | —            | **94.5 MiB**  |
+
+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+from above,
+stage0 -> dataset1
+stage1 -> dataset2
+stage3 -> joining of dataset1 and dataset2 (shuffle data - 200 partitions)
+
+
+# Explain Plan
+df_joined.explain()
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
