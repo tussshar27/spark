@@ -1,3 +1,6 @@
+video link:
+https://youtu.be/VHtPqEp2V3k?si=98ifMj8ZqATSiUzM
+
 Spark SQL is an abstraction of Spark core APIs.
 
 whatever we done using spark dataframe APIs can also be done using spark SQL.
@@ -161,6 +164,287 @@ emp_df_filtered = spark.sql("""
     where department_id = 1
 """)
 emp_df_filtered.show()
+
+
+create a new dob_year column from dob column 
+df = spark.sql("""
+select e.* , date_format(dob,'YYYY') as dob_year
+from emp_view e
+where department_id = 1
+""")
+df.show()
+
++----------+---------+--------------------+----------+--------------------+--------------------+--------+--------------+--------+
+|first_name|last_name|job_title            |dob       |email               |phone               |salary  |department_id |dob_year|
++----------+---------+--------------------+----------+--------------------+--------------------+--------+--------------+--------+
+|Carl      |Peterson |Proofreader          |1984-11-23|andrew20@example.net|241-871-9102x3835   |287728.0|1             |1984    |
+|Kristin   |Martin   |IT consultant        |1964-02-23|autumn05@example.com|(625)327-0615       |563768.0|1             |1964    |
+|Benjamin  |Lopez    |Agricultural engi... |1966-01-20|ryan46@example.org  |+1-256-376-8069x339 |891725.0|1             |1966    |
+|Leslie    |Rodriguez|Horticulturist, c... |1973-06-16|thomassutton@ex...  |001-630-539-4136x...|875940.0|1             |1973    |
+|Angela    |Martin   |Company secretary    |1979-07-07|jholmes@example.org |001-267-831-8987x...|485302.0|1             |1979    |
+|Julia     |Gomez    |Advice worker        |1963-03-02|xjackson@example.net|495-667-0287        |59589.0 |1             |1963    |
+|Jeremy    |Hunt     |Radiation protect... |1987-12-06|moraeric@example.net|6276248675          |199026.0|1             |1987    |
+|Alice     |Rice     |Advertising art d... |1964-04-03|amy82@example.net   |2208895255          |967862.0|1             |1964    |
+|Clinton   |Cunningham|Designer, exhibit...|1984-07-22|margaret29@example...|(526)879-8418x297...|660617.0|1             |1984    |
+|Susan     |Ford     |Geographical info... |1985-05-06|sherrirobinson@ex...|(734)226-1079       |991902.0|1             |1985    |
+|Gregory   |Stevens  |Engineer, building...|1997-11-17|sgreen@example.org  |676-481-8023        |986664.0|1             |1997    |
+|Shannon   |Bowen    |Industrial/produ...  |1973-05-07|gharris@example.org |(891)559-1318x860   |201522.0|1             |1973    |
+|Dylan     |Sullivan |Television camera...|1999-06-23|michaelallis...     |001-757-795-1822x...|715727.0|1             |1999    |
++----------+---------+--------------------+----------+--------------------+--------------------+--------+--------------+--------+
+
+now,
+again we want to register the dataframe as view
+from above df,
+df.createOrReplaceTempView("emp_temp_view")
+
+spark.sql("show tables in default").show()
++---------+------------+-----------+
+|namespace|tableName   |isTemporary|
++---------+------------+-----------+
+|         |dept_view   |true       |
+|         |emp_temp_view|true      |
+|         |emp_view    |true       |
++---------+------------+-----------+
+
+spark.sql("select * from emp_temp_view").show()
+
+join emp and dept - HINTS
+spark.sql("""
+select e.*, d.department_name
+from emp_temp_view e left join dept_view d
+on e.department_id = d.department_id
+""").show()
+
+#output:
++----------+---------+--------------------+----------+--------------------+--------------------+--------+--------------+--------+--------------------+
+|first_name|last_name|job_title            |dob       |email               |phone               |salary  |department_id |dob_year|department_name     |
++----------+---------+--------------------+----------+--------------------+--------------------+--------+--------------+--------+--------------------+
+|Samantha  |Brown    |Diagnostic radiog... |1966-06-11|jwatson@example.com |(428)806-5154       |439679.0|3             |1966    |Pittman, Hess and...|
+|Justin    |Castaneda|Human resources o... |1996-11-11|sdavis@example.org  |001-581-642-9621    |97388.0 |4             |1996    |Smith, Snyder and...|
+|Carl      |Peterson |Proofreader          |1984-11-23|andrew20@example.net|241-871-9102x3835   |287728.0|1             |1984    |Bryan-James, ...     |
+|Catherine |Lane     |Location manager     |1966-06-21|elizabethbalexande...|470.866.4415x0739   |174151.0|3             |1966    |Pittman, Hess and...|
+|Aaron     |Delgado  |Teacher, secondary...|1972-10-11|william5@example... |384.336.5759x4831   |209013.0|8             |1972    |Parker PLC          |
+|Michelle  |Hill     |Customer service ... |1984-01-15|antoniojoseph@exa...|368.485.0685x793    |764126.0|8             |1984    |Parker PLC          |
+|Kristin   |Martin   |IT consultant        |1964-02-23|autumn05@example.com|(625)327-0615       |563768.0|1             |1964    |Bryan-James, ...     |
+|Carol     |Nichols  |Phytotherapist       |1969-02-14|crawfordsarah@exa...|422-490-1069x3809   |156689.0|10            |1969    |Delgado-Keller      |
+|Peter     |Hill     |Cytogeneticist       |1964-09-23|xholt@example.org   |935.573.8160        |957436.0|5             |1964    |Hardin Inc          |
+|Benjamin  |Lopez    |Agricultural engi... |1966-01-20|ryan46@example.org  |+1-256-376-8069x339 |891725.0|1             |1966    |Bryan-James, ...     |
+|Susan     |Savage   |Optician, dispensi...|1996-07-27|taylorjoshua@exa... |+1-393-821-5515x816 |198396.0|6             |1996    |Sanders LLC         |
+|Robert    |Cox      |Occupational ther... |1993-06-27|anthony00@example...|8008487748          |907659.0|3             |1993    |Pittman, Hess and...|
+|Evan      |Terry    |Local government ... |1982-01-03|srodriguez@example...|220-913-4625        |693419.0|5             |1982    |Hardin Inc          |
+|Justin    |Santiago |Make                |1965-03-20|birdjoe@example.org |861-317-7926        |815251.0|7             |1965    |Ward-Gordon         |
+|Rose      |Gregory  |Barrister           |1974-10-31|samuel27@example.net|923-304-9438        |673811.0|2             |1974    |Smith, Craig and... |
+|Nicholas  |Short    |Charity fundraiser  |1998-10-03|brian12@example.com |855.973.7301        |538901.0|4             |1998    |Smith, Snyder and...|
+|John      |Hanson   |Lecturer, higher ... |2001-04-12|zweiss@example.com  |(453)740-2558       |247223.0|7             |2001    |Ward-Gordon         |
+|Bryan     |Turner   |Public relations ... |1984-01-30|ssmith@example.com  |426.547.0413x20201  |286799.0|6             |1984    |Sanders LLC         |
+|Tonya     |Schultz  |Contracting civil... |1982-05-07|douglas54@example.com|578-916-7661       |664105.0|4             |1982    |Smith, Snyder and...|
+|Patricia  |Anderson |Set designer        |1974-09-22|joshua92@example.net|001-765-729-3973x...|439446.0|2             |1974    |Smith, Craig and... |
++----------+---------+--------------------+----------+--------------------+--------------------+--------+--------------+--------+--------------------+
+only showing top 20 rows
+
+now, 
+if you go to spark UI > SQL/Dataframe tab:
+a new job is created and inside that we can see Broadcast join is happened because of AQE in spark SQL which will automatically do broadcast join with the smaller dataset.
+
+consider,
+instead of Broadcast join, we want Shuffle Sort Merge join then we need to provide a HINT
+we can find the list of hints in the spark SQL documentation.
+
+spark.sql("""
+select /*+ SHUFFLE_MERGE(e) */
+e.*, d.department_name
+from emp_temp_view e left join dept_view d
+on e.department_id = d.department_id
+""").show()
+
+
+now, if we go to spark UI > SQL/DAtaframe > open the latest new job,
+we can see it has done exchange, then sort and then Sortmerge join .
+
+similarly,
+if we want to do broadcast join:
+
+spark.sql("""
+select /*+ BROADCAST(d) */
+e.*, d.department_name
+from emp_temp_view e left join dept_view d
+on e.department_id = d.department_id
+""").show()
+
+saving it as dataframe:
+emp_final_df = spark.sql("""
+select /*+ BROADCAST(d) */
+e.*, d.department_name
+from emp_temp_view e left join dept_view d
+on e.department_id = d.department_id
+""")
+emp_final_df.show()
+
+now, saving the dataframe as a table
+emp_final_df.spark.write.format("parquet").saveAsTable("emp_final")
+
+after running above query, spark has created a new folder called 'spark-warehouse' to store the parquet files related to the above table.
+folder:
+inside this /pyspark-zero-to-hero/
+
+Name                Last Modified
+data                9 months ago
+datasets            3 days ago
+examples            9 months ago
+mnt                 2 months ago
+spark-warehouse     seconds ago
+
+inside spark-warehouse folder:
+... / spark-warehouse / emp_final /
+
+Name
+_SUCCESS
+part-00000-f6a5144b-d57a-4fe8-afaf-f5b37755c705-c000.snappy.parquet
+part-00001-f6a5144b-d57a-4fe8-afaf-f5b37755c705-c000.snappy.parquet
+part-00002-f6a5144b-d57a-4fe8-afaf-f5b37755c705-c000.snappy.parquet
+part-00003-f6a5144b-d57a-4fe8-afaf-f5b37755c705-c000.snappy.parquet
+part-00004-f6a5144b-d57a-4fe8-afaf-f5b37755c705-c000.snappy.parquet
+part-00005-f6a5144b-d57a-4fe8-afaf-f5b37755c705-c000.snappy.parquet
+part-00006-f6a5144b-d57a-4fe8-afaf-f5b37755c705-c000.snappy.parquet
+part-00007-f6a5144b-d57a-4fe8-afaf-f5b37755c705-c000.snappy.parquet
+
+so there are two options we can read this table directly:
+spark.sql("show tables in default").show()
++---------+-----------+---------------+
+|namespace|tableName      |isTemporary|
++---------+-----------+---------------+
+|default  |emp_final      |false      |
+|         |dept_view      |true       |
+|         |emp_temp_view  |true       |
+|         |emp_view       |true       |
++---------+-----------+---------------+
+
+emp_df = spark.sql("select * from emp_final")
+emp_df.show()
+
+OR
+
+emp_df = spark.read.table("emp_final")
+emp_df.show()
+
+all of these till now we were doing in in-memory catalog:
+# Spark Catalog (Metadata) - in-memory/hive
+
+spark.conf.get("spark.sql.catalogImplementation")
+'in-memory'
+
+
+once we close the session then this particular catalog will be lost.
+do Restart Kernel
+
+spark.sql("show tables in default").show()
++---------+---------+-----------+
+|namespace|tableName|isTemporary|
++---------+---------+-----------+
++---------+---------+-----------+
+
+so to persist the metadata, we have to use Hive catalog instead of the default in-memory catalog.
+# Spark Session
+from pyspark.sql import SparkSession
+
+spark = (
+    SparkSession
+        .builder
+        .appName("Spark SQL")
+        .master("local[*]")
+        .enableHiveSupport()                #Hive Catalog
+        .getOrCreate()
+)
+
+spark
+
+now again read the dataframe and joins 
+
+if we see teh catalog implementation:
+spark.conf.get("spark.sql.catalogImplementation")
+'hive'
+
+
+we can see there is metastore_db folder created:
+inside this:
+/pyspark-zero-to-hero/
+
+Name           Last Modified
+data           9 months ago
+datasets       3 days ago
+examples       9 months ago
+metastore_db   seconds ago
+mnt            2 months ago
+spark-warehouse 7 minutes ago
+
+inside that spark will store catalog metadata information:
+/pyspark-zero-to-hero/metastore_db/
+
+Name
+log
+seg0
+tmp
+db.lck
+dbex.lck
+README_DO_NOT_TOUCH_...
+service.properties
+
+through this above location, whenever we recreate a new session then by default spark will go to this metastore_db location and get the catalog information.
+
+after restarting the kernel
+spark.sql("show tables in default").show()
+
++---------+---------+-----------+
+|namespace|tableName|isTemporary|
++---------+---------+-----------+
+|default  |emp_final|false      |
++---------+---------+-----------+
+
+we can see emp_final table is still there because it is registered in catalog.
+
+# Show details of metadata
+
+spark.sql("describe extended emp_final").show()
++--------------------+---------+-------+
+|col_name            |data_type|comment|
++--------------------+---------+-------+
+|first_name          |string   |null   |
+|last_name           |string   |null   |
+|job_title           |string   |null   |
+|dob                 |string   |null   |
+|email               |string   |null   |
+|phone               |string   |null   |
+|salary              |double   |null   |
+|department_id       |int      |null   |
+|department_name     |string   |null   |
+|                    |         |       |
+|# Detailed Table ...|         |       |
+|Database            |default  |       |
+|Table               |emp_final|       |
+|Owner               |root     |       |
+|Created Time        |Sat Jan 06 10:03:...|
+|Last Access         |UNKNOWN  |       |
+|Created By          |Spark 3.3.0|      |
+|Type                |MANAGED  |       |
+|Provider            |parquet  |       |
+|Statistics          |37700526 bytes|
++--------------------+---------+-------+
+
+only showing top 20 rows
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
