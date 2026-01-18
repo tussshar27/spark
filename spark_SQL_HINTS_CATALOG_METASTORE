@@ -1,1 +1,181 @@
+Spark SQL is an abstraction of Spark core APIs.
+
+whatever we done using spark dataframe APIs can also be done using spark SQL.
+
+generating spark session:
+# Spark Session
+from pyspark.sql import SparkSession
+
+spark = (
+    SparkSession
+        .builder
+        .appName("Spark SQL")
+        .master("local[*]")
+        .getOrCreate()
+)
+
+spark
+
+
+# Read Employee data
+_schema = "first_name string, last_name string, job_title string, dob string, email string, phone string, salary double, department_id int"
+
+emp = spark.read.format("csv") \
+    .schema(_schema) \
+    .option("header", True) \
+    .load("/data/input/employee_records_skewed.csv")
+
+# Read DEPT CSV data
+_dept_schema = "department_id int, department_name string, description string, city string, state string, country string"
+
+dept = spark.read.format("csv") \
+    .schema(_dept_schema) \
+    .option("header", True) \
+    .load("/data/input/department_data.csv")
+
+
+spark catalog (metadata) - in-memory/hive
+what is Catalog?
+Catalog stores the metadata of SQL objects.
+
+what is metadata?
+metadata is the data about your data.
+eg, tablename, columnname, datatypes, etc.
+
+by default, the catalog is created in RAM in-memory so once the session is lost then the catalog will also be lost.
+but it's not a good thing, because if we create a table and next time if we want to see that then it won't be available.
+
+spark.conf.get("spark.sql.catalogImplementation")
+#output:
+'in-memory'
+
+to safeguard metadata, spark provides one more catalog implementation using Hive.
+
+to run spark SQL:
+syntax:
+spark.sql("<SQL query>")
+
+#show databases
+spark.sql("show databases")
+
+if we run above query then it won't show output as by default spark works with dataframe so we need to create dataframe.
+
+df = spark.sql("show databases")
+df.show()
+#output:
++-----------+
+| namespace |
++-----------+
+| default   |
++-----------+
+
+#to see tables available in database
+spark.sql("show tables in default").show()
++---------+---------+-----------+
+|namespace|tableName|isTemporary|
++---------+---------+-----------+
++---------+---------+-----------+
+
+
+.show() is an action so whenever we run the action, and if you check in spark UI a job is created.
+so spark uses core API in background.
+
+now,
+since there is no tables above, create temp view on the above two created dataframes.
+there are two types of temp view:
+1. global temp view - it will be available in other sessions as well
+2. temp view - it will be only available in same session.
+
+dataframe functions to create temp view:
+.createGlobalTempView()
+.createOrReplaceGlobalTempView()
+.createOrReplaceTempView()
+.createTempView()
+
+so,
+emp.createOrReplaceTempView("emp_view")
+dept.createOrReplaceTempView("dept_view")
+
+spark.sql("show tables in default").show()
++---------+---------+-----------+
+|namespace|tableName|isTemporary|
++---------+---------+-----------+
+|default  |dept_view|true       |
+|default  |emp_view |true       |
++---------+---------+-----------+
+
+
+we can see above that isTemporary is 'true' because it is a temporary view, if it was a table then isTemporary would be 'false'.
+
+now, our views are ready so we can query the data from it.
+
+spark.sql("select * from emp_view").show()        
+
+#output:
++----------+---------+----------------------+----------+--------------------+--------------------+--------+--------------+
+|first_name|last_name|job_title             |dob       |email               |phone               |salary  |department_id |
++----------+---------+----------------------+----------+--------------------+--------------------+--------+--------------+
+|Samantha  |Brown    |Diagnostic radiog...  |1966-06-11|jwatson@example.com |(428)806-5154       |439679.0|3             |
+|Justin    |Castaneda|Human resources o...  |1996-11-11|sdavis@example.org  |001-581-642-9621    |97388.0 |4             |
+|Carl      |Peterson |Proofreader          |1984-11-23|andrew20@example.net|241-871-9102x3835   |287728.0|1             |
+|Catherine |Lane     |Location manager     |1966-06-21|elizabethbalexande...|470.866.4415x0739   |174151.0|3             |
+|Aaron     |Delgado  |Teacher, secondary... |1972-10-11|william5@example... |384.336.5759x4831   |209013.0|8             |
+|Michelle  |Hill     |Customer service ...  |1984-01-15|antoniojoseph@exa...|368.485.0685x793    |764126.0|8             |
+|Kristin   |Martin   |IT consultant        |1964-02-23|autumn05@example.com| (625)327-0615      |563768.0|1             |
+|Carol     |Nichols  |Phytotherapist       |1969-02-14|crawfordsarah@exa...|422-490-1069x3809   |156689.0|10            |
+|Peter     |Hill     |Cytogeneticist       |1964-09-23|xholt@example.org   |935.573.8160        |957436.0|5             |
+|Benjamin  |Lopez    |Agricultural engi... |1966-01-20|ryan46@example.org  |+1-256-376-8069x339 |891725.0|1             |
+|Susan     |Savage   |Optician, dispensi...|1996-07-27|taylorjoshua@exa... |+1-393-821-5515x816 |198396.0|6             |
+|Robert    |Cox      |Occupational ther... |1993-06-27|anthony00@example...|8008487748          |907659.0|3             |
+|Evan      |Terry    |Local government ... |1982-01-03|srodriguez@example...|220-913-4625        |693419.0|5             |
++----------+---------+----------------------+----------+--------------------+--------------------+--------+--------------+
+
+#if we want to write multi line sql query then use """ """
+spark.sql("""
+    select * from emp_view
+    where department_id = 1
+""").show()
+
+#output:
++----------+---------+--------------------+----------+--------------------+--------------------+--------+--------------+
+|first_name|last_name|job_title            |dob       |email               |phone               |salary  |department_id |
++----------+---------+--------------------+----------+--------------------+--------------------+--------+--------------+
+|Carl      |Peterson |Proofreader          |1984-11-23|andrew20@example.net|241-871-9102x3835   |287728.0|1             |
+|Kristin   |Martin   |IT consultant        |1964-02-23|autumn05@example.com| (625)327-0615      |563768.0|1             |
+|Benjamin  |Lopez    |Agricultural engi... |1966-01-20|ryan46@example.org  |+1-256-376-8069x339 |891725.0|1             |
+|Leslie    |Rodriguez|Horticulturist, c... |1973-06-16|thomassutton@ex...  |001-630-539-4136x...|875940.0|1             |
+|Angela    |Martin   |Company secretary    |1979-07-07|jholmes@example.org |001-267-831-8987x...|485302.0|1             |
+|Julia     |Gomez    |Advice worker        |1963-03-02|xjackson@example.net|495-667-0287        |59589.0 |1             |
+|Jeremy    |Hunt     |Radiation protect... |1987-12-06|moraeric@example.net|6276248675          |199026.0|1             |
+|Alice     |Rice     |Advertising art d... |1964-04-03|amy82@example.net   |2208895255          |967862.0|1             |
+|Clinton   |Cunningham|Designer, exhibit...|1984-07-22|margaret29@example...|(526)879-8418x297...|660617.0|1             |
+|Susan     |Ford     |Geographical info... |1985-05-06|sherrirobinson@ex...|(734)226-1079       |991902.0|1             |
+|Gregory   |Stevens  |Engineer, building...|1997-11-17|sgreen@example.org  |676-481-8023        |986664.0|1             |
+|Shannon   |Bowen    |Industrial/produ...  |1973-05-07|gharris@example.org |(891)559-1318x860   |201522.0|1             |
+|Dylan     |Sullivan |Television camera...|1999-06-23|michaelallis...     |001-757-795-1822x...|715727.0|1             |
++----------+---------+--------------------+----------+--------------------+--------------------+--------+--------------+
+
+if we want to create dataframe then we can do that and perform data manipulation using dataframe API
+emp_df_filtered = spark.sql("""
+    select * from emp_view
+    where department_id = 1
+""")
+emp_df_filtered.show()
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
