@@ -269,6 +269,26 @@ from pyspark.sql.functions import count, col
 df = df.groupBy(col("dept_id")).agg(count(col("emp_id")).alias("emp_count")).filter("emp_count > 2")
 df.show()
 
+#sql
+SELECT city, SUM(sales) AS total_sales
+FROM sales_table
+WHERE year = 2025
+GROUP BY city
+HAVING SUM(sales) > 100000
+
+# above sql in pyspark below:
+# having: 
+# There is no explicit having() function.
+# You apply filter() after aggregation.
+# filter() after groupBy()
+from pyspark.sql.functions import sum
+
+df.filter(col("year") == 2025) \
+  .groupBy("city") \
+  .agg(sum("sales").alias("total_sales")) \
+  .filter(col("total_sales") > 100000)
+
+
 #BONUS TIP
 #spark also provides count() function to get the count of records of a dataframe directly
 df.count()
