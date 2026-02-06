@@ -104,10 +104,11 @@ emp_casted_1.show()
 
 #Bonus Tip:
 #spark has a built-in function which converts your basic schema string to the spark native datatype.
-schema_string = "name string, age int"
 from pyspark.sql.types import _parse_datatype_string
-df_sch_str = _parse_datatype_string(df_sch_str)
+schema_string = "name string, age int"
+df_sch_str = _parse_datatype_string(schema_string)
 df_sch_str
+
 
 #output:
 StructType([StructField('name', StringType(), True), StructField('age', IntegerType, True)]), True)]), True)]) 
