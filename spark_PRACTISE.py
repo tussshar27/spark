@@ -315,6 +315,26 @@ window_spec = Window.partitionBy(col("dept_id"))
 df = df.withColumn("max_salary",max(col("salary")).over(window_spec))
 df.show()
 
+#output
+dept_id | max_sal
+--------|---------
+10      | 9000
+10      | 9000
+10      | 9000
+20      | 12000
+20      | 12000
+
+SELECT dept_id, MAX(salary)
+FROM emp
+GROUP BY dept_id;
+
+#output
+dept_id | max(salary)
+--------|------------
+10      | 9000
+20      | 12000
+
+
 #Eg2.
 #SQL: select e.* from (select dept_id, row_number() over(partition by dept_id order by salary) as emp_rank from emp) e where e.emp_rank = 1;
 window_spec = Window.partitionBy(col("dept_id")).orderBy(col("salary").desc())
@@ -353,7 +373,7 @@ df.getNumPartitions()
 4
 
 
-#coalesce: no data shuffling happens , and can't guarantee uniform data distribution
+#coalesce: no data shuffling happens, and can't guarantee uniform data distribution
 #if the current partitions are 8 and you do 100 then also it will show 8 b/c it can't increase the partitions.
 df.getNumPartitions()
 df = df.coalesce(100)
@@ -362,25 +382,31 @@ df.getNumPartitions()
 
 #but we can decrease the number of partitions
 df = df.coalesce(3)
-df.getNumPartitions()
+df.rdd.getNumPartitions()
 3
 
 #how repartition works under the hood?
 1. spark uses hash partitioning strategy to perform repartition with columns.
 2. for each row, it computes hash of the partition key.
 3. each partition has its own index [0 ... numPartitions-1]
-4. repartition maps thath hash to its partition index by using the formula: partition_index = nonNegativeHash(hash) % numPartitions Eg. 2 = 2 % 4
+4. repartition maps that hash to its partition index by using the formula: partition_index = nonNegativeHash(hash) % numPartitions Eg. 2 = 2 % 4
 5. all rows whose key hashes to the same index are placed into same partition
 
 #How to inspect which row went to which partition?
 1. by using spark_partition_id() we can find each row's partition index.
-2. Eg. creating a new column to get the partition index of each row whicle performing repartition:
+2. Eg. creating a new column to get the partition index of each row while performing repartition:
 from pyspark.sql.functions import spark_partition_id
 df = df.repartition(4,"dept_id").withColumn("partition",spark_partition_id())
 df.show()
+
 3. Eg. getting the distribution count of rows in each partition or to check partition Skew:
 from pyspark.sql.functions import col, count, spark_partition_id
-df.groupBy(col("partition")).count().show()	OR df.groupBy(spark_partition_id()).count().show()
+df.groupBy(col("partition")).count().show()	
+OR 
+df.groupBy(col("partition")).agg(count(lit(1))).show() #above and this query are same internally
+OR 
+df.groupBy(spark_partition_id()).count().show()
+
 4. to check which dept_id value went to which partition:
 df.select("dept_id","partition").distinct().orderBy(col("partition").asc()).show(truncate=False)
 
@@ -839,7 +865,7 @@ df.show()
 |{Delhi, 110011}       |{20, Finance}      |2      |Ravi   |[{ReportingSystem, 4}]                             |[Python, ETL]            |
 +----------------------+-------------------+-------+-------+----------------------------------------------------+-------------------------+
 
-#so here spark automatically identifies json metadata and bifercate the data into columns
+#so here spark automatically identifies json metadata and bifurcates the data into columns
 #but what if we want all of the data in single column and don't want to expand data
 #reading the entire JSON record as a single column (a raw string)
 {"order_id": "O101", "customer_id": "C001", "order_line_items": [{"item_id": "I001", "qty": 6, "amount": 102.45}, {"item_id": "I002", "qty": 2, "amount": 2.01}], "contact": [9000010000, 9000010001]}
@@ -1311,7 +1337,7 @@ spark.sparkContext.defaultParallelism
 #output
 8
 #to check from spark UI:
-#-> go to spark UI > Executors tab > we can find number of executors available and its cores. 
+#-> go to Spark UI > Executors tab > we can find the number of executors available and their cores. 
 
 #to check number of partitions
 df.rdd.getNumPartitions()
@@ -1579,20 +1605,20 @@ driver node -> resource manager -> cluster (worker node1 + worker node2)
 #IMPORTANT:
 HOW SPARK WORK INTERNALLY?:
 In Client mode: the driver runs in client machine/laptop.
-In CLuster mode: the driver program runs in one of the executors inside the worker node. the resource manager will create one special driver executor for the driver program.
+In Cluster mode: the driver program runs in one of the executors inside the worker node. The resource manager will create one special driver executor for the driver program.
 1. when we submit our spark program or run databricks notebook, the driver program starts and creates a sparkSession. Driver asks Cluster Manager for the required resources.
 #SparkSession = Entry point → communicates with Cluster Manager.
 Driver says:
 "I need X executors"
-"Each executor needs Y cores & Z memory"
-2. eg, you asked for 4 executors with 2 CPU cores each equals to 8 CPU cores.
+"Each executor needs Y cores & Z memory."
+2. eg, you asked for 4 executors with 2 CPU cores each, which equals 8 CPU cores.
 3. now the resource manager will connect with the cluster and it will create the required executors inside the allocated worker nodes.
 4. as per our calculation, for each worker node, it created two executors. and for each executor it will create two CPU cores.
 5. once the resource is allocated in each worker node, resource manager will get back to driver program with the required information.
 6. once the information is supplied to the driver program, then the driver builds DAG (Directed Acyclic Graph) as Spark never executes transformations immediately.
 Every transformation (filter, select, map) builds a logical execution plan called DAG.
 Narrow dependencies & wide dependencies are identified.
-7. DAG is submitted to DAG Scheduler. Scheduler spilts DAG into stages based on shuffle boundaries.
+7. DAG is submitted to DAG Scheduler. Scheduler splits DAG into stages based on shuffle boundaries.
 Before shuffle → Stage 1
 After shuffle → Stage 2
 After another shuffle → Stage 3
@@ -1603,15 +1629,15 @@ After another shuffle → Stage 3
 8. once the python program is available in all the executors then the spark session will instruct the tasks to perform in each core.
 9. now all the CPU cores will have their tasks that they need to perform in order to process the data.
 10. and once the processing is done, executors will report back to the driver program with the required result.
-11. based on the result status whether it succeeded or failed. driver program will now communicate again with resource manager to shutdown the allocated resources.
+11. based on the result status, whether it succeeded or failed. driver program will now communicate again with resource manager to shutdown the allocated resources.
 12. once the resource manager gets all the information, it will scrap off all the executors it has created for that application.
 
 Resource manager/ cluster manager -> responsible for allocating resource to the driver program.
-there are four types of cluster manager:
+There are four types of cluster managers:
 1. standalone: spark cluster
 2. YARN: hadoop cluster
 3. Mesos: no longer available
-4. Kubernetes: for containerize environment
+4. Kubernetes: for a containerized environment
 
 Spark Master UI: http://localhost:8080
 Spark Worker UI: http://localhost:8081
@@ -1912,7 +1938,7 @@ Simple explanation:
 demerits of using UDF:
 1. data needs to be serialize/deserialize
 2. independent python UDF process
-3. once python UDF process spinup in each node, the data has to be read row by row
+3. once python UDF process spins up in each node, the data has to be read row by row
 
 solution:
 1. not to use UDF, rather use high order functions.
@@ -2010,16 +2036,6 @@ Remove redundant operations.
 
 
 							   
-
-
-
-
-
-
-
-
-
-
 
 
 
@@ -2166,7 +2182,7 @@ eg: sc.parallelize([1,2,3,4])
 3. flatMap(): it is also a transformation which is similar to map() just that it is used to merge sublist to product single RDD list.
 so it is a combination of both map and flatten.
 
-4. reduce(): it is an action which aggregates all the elements of an RDD and produce a single output.
+4. reduce(): it is an action that aggregates all the elements of an RDD and produce a single output.
 
 
 example of all three functions: if you have a list in your driver program, say [1,2,3,4,5], and you parallelize it into an RDD. 
@@ -2205,7 +2221,7 @@ reduced = rdd.reduceByKey(lambda a,b: a+b)
 print(reduced)
 #[('A',4),('B',2),('C',4)]
 
-also, groupbykey gives grouped output where as reducebykey gives aggregated output.
+also, groupbykey gives grouped output, whereas reducebykey gives aggregated output.
 so reduceByKey() is more efficient than groupByKey()
 
 
