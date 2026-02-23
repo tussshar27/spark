@@ -27,6 +27,13 @@ spark = SparkSession.builder.appName("ErrorLogExtraction").getOrCreate()
 log_file_path = "path_to_your_log_file.txt"
 logs_df = spark.read.text(log_file_path)
 
+# OR
+
+df = spark.read.option("delimiter", ",") \
+               .option("header", "true") \
+               .option("inferSchema", "true") \
+               .csv("path/to/data.txt")
+
 # Define a regular expression pattern to extract timestamp and error messages
 # Assuming the log format has a timestamp at the beginning of each line, followed by log level and message
 timestamp_pattern = r"(\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2})"  # Pattern to capture timestamp
