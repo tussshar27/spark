@@ -92,6 +92,7 @@ df_joined.explain()
       +- *(2) Filter isnotnull(department_id#16)
          +- FileScan csv [department_id#16,department_name#17,description#18,city#19,state#20,country#21] Batched: false, DataFilters: [isnotnull(department_id#16)], Format: CSV, Location: InMemoryFileIndex(1 paths) [file:/data/input/department_data.csv], PartitionFilters: [], PushedFilters: [IsNotNull(department_id)], ReadSchema: struct<department_id:int,department_name:string,description:string,city:string,state:string,country:string>
 
+Spark first reads both CSV files, shuffles both datasets by department_id into 200 partitions, sorts each partition, and then performs a SortMergeJoin with left outer semantics.
 if we check above, since we have disabled broadcast join, spark has done sortmerge join.
 
 df_joined.write.format("noop").mode("overwrite").save()
@@ -105,6 +106,8 @@ Aggregated Metrics by Executor
 
 we can see spillage of data happened above.
 
++- Exchange hashpartitioning(department_id#7, 200), ENSURE_REQUIREMENTS, [id=#17]
++- Exchange hashpartitioning(department_id#16, 200), ENSURE_REQUIREMENTS, [id=#29]
 by default spark has created 200 shuffle partitions and we have to manually reduce spark shuffle partitions if AQE is disabled.
 but if we enable AQE then spark takes care of number of shuffle partitions required.
 now its enable AQE and see:
@@ -115,12 +118,15 @@ now its enable AQE and see:
 spark.conf.set("spark.sql.adaptive.enabled", True)
 spark.conf.set("spark.sql.adaptive.coalescePartitions.enabled", True)
 
-#partition size spark will create post shuffle
+#partition size Spark will create post-shuffle
 spark.conf.set("spark.sql.adaptive.advisoryPartitionSizeInBytes", "8MB")    #default value: 64MB
 #we are setting 8MB since we are using smaller cluster and task memory is less.
 
+#setting the skewed partition threshold
 spark.conf.set("spark.sql.adaptive.skewJoin.skewedPartitionThresholdInBytes", "10MB")    #default value: 256MB
 #we are setting skewed partition threshold to 10MB so that if any partition data exceeds 10MB then it will be considered as skewed.
+
+We lowered advisory partition size to 8MB because we are using a smaller cluster with low executor memory. We also reduced skew threshold to 10MB so that moderately large partitions are detected as skewed early and split by AQE, preventing long-running skewed join tasks.
 
 Completed Stages (1)
 | Stage Id | Description                             | Submitted           | Duration | Tasks (Succeeded/Total) | Input | Output | Shuffle Read | Shuffle Write |
@@ -144,7 +150,7 @@ and there is no spillage of data
 
 (Remaining tasks follow the same pattern; total tasks = 17)
 
-so because of AQE, spark don't need to perform Salting technique.
+so because of AQE, spark does't need to perform Salting technique.
 
 now enabling broadcast join:
 since earlier we disables braodcast join so spark done sort-merge join.
