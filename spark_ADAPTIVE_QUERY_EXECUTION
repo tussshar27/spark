@@ -126,6 +126,16 @@ spark.conf.set("spark.sql.adaptive.advisoryPartitionSizeInBytes", "8MB")    #def
 spark.conf.set("spark.sql.adaptive.skewJoin.skewedPartitionThresholdInBytes", "10MB")    #default value: 256MB
 #we are setting skewed partition threshold to 10MB so that if any partition data exceeds 10MB then it will be considered as skewed.
 
+If skew threshold were also 64MB:
+Almost every slightly large partition would be marked skewed
+Spark would keep splitting partitions
+Too many small tasks
+Scheduler overhead
+Performance degradation
+
+So Spark designers chose:
+“Let partitions grow a bit. Only fix extreme skew.”
+
 We lowered advisory partition size to 8MB because we are using a smaller cluster with low executor memory. We also reduced skew threshold to 10MB so that moderately large partitions are detected as skewed early and split by AQE, preventing long-running skewed join tasks.
 
 Completed Stages (1)
