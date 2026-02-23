@@ -10,7 +10,7 @@ AQE is available from spark 3.0+ version
 Three major features of AQE:
 1. coalescing post-shuffle partition - remove unnecessary shuffle partitions
 2. converting sort-merge join to broadcast join
-3. skew join optimization - join smaller partitions and split bigger partitions
+3. skew join optimization - join smaller partitions and split bigger partitions/ AQE splits the skewed partition into smaller chunks
 
 Adaptive Query Execution (AQE) is an optimization technique in Spark SQL that makes use of the runtime statistics to choose the most efficient query execution plan,
 which is enabled by default since Apache Spark 3.2.0. 
