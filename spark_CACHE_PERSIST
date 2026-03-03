@@ -1,5 +1,9 @@
 https://youtu.be/5peB6KcCsd4?si=silODGnJri3ySpq0
 
+what is caching?
+Caching is a mechanism to save dataframe/dataset/rdd in memory, disk or both in order to avoid recalculation.
+
+
 from pyspark.sql import SparkSession
 spark = (
   SparkSession
@@ -32,7 +36,7 @@ df.where("amount > 300").show()
 df.cache()
 #after running above code, there is no job or storage RDD created in spark UI
 #in order to actually cache the dataframe, we need to run action
-#because cache() need action, and count and write are preferred since they scan the whole dataset resulting in proper caching.
+#because cache() need action, and count or write actions are preferred since they scan the whole dataset resulting in proper caching.
 
 df.cache().count()
 #now go to spark UI > storage tab > storage RDD is created for cache
