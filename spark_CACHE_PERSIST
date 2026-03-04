@@ -28,9 +28,10 @@ df = spark.read.format("csv").schema(_schema).option("header",True).load("data/i
 
 #since we are already defining the schema, there will be no job created after running above code
 
-df.where("amount > 300").show()
-#after running above where clause, go to spark UI > SQL/Dataframe tab > open the job created > we can see scan the file DAG
-#so we have already scanned our file in first step but here while using where clause also spark is again scanning the file.
+
+df.where("amount > 300").show()        #viewing some of the data
+#after running above where clause, go to spark UI > SQL/Dataframe tab > open the job created > we can see 'SCAN' the file DAG
+#NOTE: so we have already scanned our file in first step of reading the file but here while using 'where' clause also spark is again scanning the file.
 
 #lets cache the dataframe
 df.cache()
@@ -39,7 +40,7 @@ df.cache()
 #because cache() need action, and count or write actions are preferred since they scan the WHOLE dataset resulting in proper caching.
 
 df.cache().count()
-#now go to spark UI > storage tab > storage RDD is created for cache
+#now go to spark UI > STORAGE tab > storage RDD is created for cache
 #notice the storage level column, it is "Disk Memory Deserialized 1x Replicated" which is default setting of cache
 #check "size in memory" and "size on disk" columns, and some of the data is in memory and some of the data spilled to disk.
 #because we have a dataset which is greater than the memory of the executor.
@@ -48,7 +49,7 @@ df.cache().count()
 #NOTE: the default storage level for cache in dataframe and dataset is MEMORY_AND_DISK .
 #NOTE: the default storage level for cache in RDD is MEMORY_ONLY.
 
-df.where("amount > 300").show()
+df.where("amount > 300").show()        #RUNNING FILTER ON CACHE DATAFRAME
 #go to spark UI > SQL/Dataframe, we can see a job is created, open it > scan csv = 0, InMemoryTableScan = 10000 records scanned.
 #csv is 0 because this execution does not hit the csv rather it has InMemoryTableScan which is the cache that we just created.
 #so cache is created in memory and disk.
@@ -71,18 +72,39 @@ df.where("amount > 100").show()
 
 #for example:
 df_cache = df.filter("amount > 100").cache()    
+
 df_cache.count()      #since we are caching filtered data which is less than the executor memory size. so when you go to spark UI > storage tab, we can see it has utilized only memory excluding disk in "size in memory" column.
+
 df.filter("amount > 50").show()
-#so if we apply different filter then we spark will read it from csv.
-#now it will do a partial scan and if we open the job in spark UI, we can see it has also read the csv file.
+
+#so if we apply different filter different from the cache condition, spark will read it from source csv.
+#now it will do a PARTIAL SCAN and if we open the job in spark UI, we can see it has also read the csv file.
 
 #doing cache with different storage level setting, use persist method
 
-# MEMORY_ONLY , MEMORY_AND_DISK , MEMORY_ONLY_SER , MEMORY_AND_DISK_SER , DISK_ONLY , MEMORY_ONLY_2 , MEMORY_AND_DISK_2
+# MEMEORY_ONLY , MEMORY_ONLY_2 , MEMORY_ONLY_SER , MEMORY_AND_DISK , MEMORY_AND_DISK_2 , MEMORY_AND_DISK_SER , DISK_ONLY
 
 #MEMORY_ONLY_SER  : used for scala/java job
-#MEMORY_ONLY_SER / MEMORY_AND_DISK_SER  : in pyspark, they are not used because by default it store serialized data in memory.
+#MEMORY_ONLY / MEMORY_AND_DISK : by default data is deserialized, used in pyspark jobs.
+#MEMORY_ONLY_SER / MEMORY_AND_DISK_SER  : USED FOR SCALA/JAVA JOBS, in pyspark, they are not used because by default it stores serialized data in memory.
 #MEMORY_ONLY_2 / MEMORY_AND_DISK_2  : go to spark UI after running > storage tab:  we get 2x Replicated data in all the executors.
+
+why MEMORY_ONLY_2 / MEMORY_AND_DISK_2 ? :
+🔥 What actually happens:
+Suppose you have 10 partitions
+Spark stores:
+1 copy on Executor A
+1 replica on Executor B
+If Executor A crashes → data still available from replica
+No recomputation required
+
+⚡ Use When:
+Cluster is large and memory is sufficient
+You want faster fault recovery
+Data is reused multiple times
+Low recomputation cost is important
+
+
 
 #IMPORTANT:
 #The Storage tab in the Spark UI shows information about cached / persisted DataFrames or RDDs.
