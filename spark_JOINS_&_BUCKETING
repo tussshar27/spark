@@ -1,7 +1,7 @@
 how join works in spark?
 -> spark reads the data in partitions
 -> spark divides both the dataset randomly in its executors in the form of partitions 
-now since the data is distributed across the executors, and in order to bring similar data of two datasets in same executor, spark performs shuffling
+-> spark performs shuffling in order to bring similar data of two datasets in same executor as the data is distributed across the executors.
 -> data shuffling happens between the executors
 -> spark performs shuffling of any one dataset first then it shuffle the other dataset.
 -> spark joins the shuffled data
@@ -25,7 +25,7 @@ c. hashed dataset will be matched with big dataset
 d. join is performed.
 
 
-if you see there is no sorting and hashing is done.
+if you see there is no sorting is done.
 so this method is reliable only if you have a smaller dataset that can be easily fit in memory.
 
 Example:
@@ -220,14 +220,14 @@ Reason: both sides are large, no broadcast, and join key is sortable.
 
 2️⃣ Why Sort-Merge Join was chosen
 ->
+spark.sql.autoBroadcastJoinThreshold not satisfied
 Spark chooses SortMergeJoin when:
 Join key is equality join
 Both datasets are large
-spark.sql.autoBroadcastJoinThreshold not satisfied
 Join key is sortable
 
 Spark performs a Sort-Merge Left Outer Join by shuffling both datasets on department_id, sorting them within each partition, and then merging the sorted partitions. 
-This strategy is chosen because both datasets are large and cannot be broadcast.
+This strategy is chosen because both datasets are large and cannot be broadcasted.
 
 Broadcast join:
 Example:
@@ -295,12 +295,12 @@ df_sales_joined = sales.join(city,on=sales.city_id==city.city_id, how="left_oute
 
 df_sales_joined.write.format("noop").mode("overwrite").save()
 
-#after running above action, go to spark UI > job : spark performed sort merge join.
+#after running above action, go to spark UI > job : spark performed shuffle sort merge join.
 
 #what if we perform broadcast join for above two big datasets.
 df_sales_joined = sales.join(broadcast(city),on=sales.city_id==city.city_id, how="left_outer")
 
-#go to spark UI > Executors tab : we can see the tasks with Red marks start failing due to its input size.
+#go to spark UI > Executors tab : we can see the tasks with Red marks start failing due to its input size as both the files are above their broadcast threshold limit.
 
 
 
