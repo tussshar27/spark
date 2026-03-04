@@ -89,6 +89,11 @@ df.filter("amount > 50").show()
 #MEMORY_ONLY_SER / MEMORY_AND_DISK_SER  : USED FOR SCALA/JAVA JOBS, in pyspark, they are not used because by default it stores serialized data in memory.
 #MEMORY_ONLY_2 / MEMORY_AND_DISK_2  : go to spark UI after running > storage tab:  we get 2x Replicated data in all the executors.
 
+If dataset fits in memory → MEMORY_ONLY
+If dataset may not fit → MEMORY_AND_DISK (avoid recomputation)
+If memory is tight → MEMORY_ONLY_SER
+If fault tolerance is critical → _2 versions
+
 why MEMORY_ONLY_2 / MEMORY_AND_DISK_2 ? :
 🔥 What actually happens:
 Suppose you have 10 partitions
