@@ -1,5 +1,9 @@
 https://youtu.be/PHVFDgk3lok?si=ESIeXOAFitrMNg09
 
+Difference between serialized and deserialized data?
+Deserialized storage keeps data as JVM objects in memory for faster processing (spark can directly process data without converting) but uses more memory, 
+while serialized storage keeps data as compressed byte arrays to save memory, but requires deserialization later for computation.
+
 Wide transformation can involve multiple partitions.
 
 what are shuffle files?
