@@ -7,6 +7,7 @@ while serialized storage keeps data as compressed byte arrays to save memory, bu
 Wide transformation can involve multiple partitions.
 
 what are shuffle files?
+Shuffle files in Spark SQL are stored using Tungsten's UnsafeRow binary format, which is a structured binary representation of rows. Unlike Java serialization, this format allows Spark to directly read data from memory without converting it back to Java objects, improving performance.
 shuffle files are serialized in tungsten binary format (also known as Unsafe Row). these files can directly be read in memory thus improving read performance.
 once these temporary files are written, in the next stage spark will read these files and perform the remaining narrow transformations.
 this is how spark follows two processes, in first process it will perform narrow transformations and create temporary shuffle files and in the sencond process it will read those created temporary shuffle files and perform the remaining narrow transformations. 
